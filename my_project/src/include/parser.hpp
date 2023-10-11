@@ -91,7 +91,7 @@ public:
     }
   };
 
-  struct perfectLinkConfig {
+  struct PerfectLinkConfig {
     int nb_messages;
     int rID;
   };

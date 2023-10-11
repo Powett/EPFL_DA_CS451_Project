@@ -34,8 +34,11 @@ UDPSocket::UDPSocket(in_addr_t IP, unsigned short port) {
   }
   return;
 }
+UDPSocket::~UDPSocket(){
+  close(sockfd);
+}
 
-int UDPSocket::unicast(const std::string &IP, unsigned short &port,
+ssize_t UDPSocket::unicast(const std::string &IP, unsigned short &port,
                        const char *buffer, ssize_t len, int flags) {
   sockaddr_in add;
   add.sin_family = AF_INET;
@@ -57,13 +60,29 @@ sockaddr_in UDPSocket::recv(char *buffer, ssize_t len, int flags) {
 
 void UDPSocket::listener(std::ofstream *logFile, sem_t *logSem) {
   // while (1) {
-  std::cout << "Thread " << gettid() << "Waiting for message!" << std::endl;
+  std::cout << "Thread " << gettid() << "Waiting for message" << std::endl;
   char buffer[MAX_PACKET_LENGTH];
-  sockaddr_in from = recv(buffer, MAX_PACKET_LENGTH);
+  sockaddr_in from = recv(this->sockfd, buffer, MAX_PACKET_LENGTH);
   auto fromStr = std::string(inet_ntoa(from.sin_addr));
   std::cout << "Received from " << fromStr << ": " << buffer << std::endl;
   sem_wait(logSem);
   (*logFile) << "Received from " << fromStr << ": " << buffer << std::endl;
   sem_post(logSem);
   // }
+}
+
+void UDPSocket::sender(messageList* pending, sem_t *pendSem){
+        std::cout << "Thread " << gettid() << "Ready to send" << std::endl;
+    // while (1){
+      sem_wait(pendSem);
+      message current = **pending;
+      ssize_t sent = unicast(current.dest, current.port, current.msg, current.len);
+      if (sent<0){
+        std::cout << "Error sending msg!" << std::endl;
+        return;
+      }
+      *pending=current.next;
+      delete current;
+      sem_post(pendSem);
+    // }
 }

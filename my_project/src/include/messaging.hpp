@@ -16,10 +16,22 @@
 class UDPSocket {
 public:
   UDPSocket(in_addr_t, unsigned short = DEFAULTPORT);
-  int unicast(const std::string &, unsigned short &, const char *,
+  ~UDPSocket();
+  ssize_t unicast(const std::string &, unsigned short &, const char *,
               ssize_t , int = 0);
   sockaddr_in recv(char *, ssize_t , int  = 0);
   void listener(std::ofstream *, sem_t *);
+  void UDPSocket::sender(messageList*, sem_t *);
 private:
   int sockfd;
 };
+
+struct message{
+  std::string dest;
+  unsigned short port;
+  char* msg;
+  ssize_t len;
+  message* next;
+};
+
+typedef struct message* messageList;
