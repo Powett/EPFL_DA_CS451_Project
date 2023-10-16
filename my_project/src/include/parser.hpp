@@ -45,6 +45,11 @@ public:
     in_addr_t ip;
     unsigned short port;
 
+    std::string fullAddressReadable() const {
+      return ipReadable() + ":" +
+             std::to_string(static_cast<int>(portReadable()));
+    }
+
   private:
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
@@ -91,9 +96,14 @@ public:
     }
   };
 
+  Host &findHost(const sockaddr_in &);
+
   struct PerfectLinkConfig {
     int nb_messages;
-    int rID;
+    unsigned long rID;
+    PerfectLinkConfig() {}
+    PerfectLinkConfig(int nb_messages, int rID)
+        : nb_messages(nb_messages), rID(rID) {}
   };
 
 public:
@@ -189,9 +199,20 @@ public:
 
     return hosts;
   }
-  perfectLinkConfig perfectLinkValues() {
+
+  static const Host *findHost(const sockaddr_in &addr,
+                              const std::vector<Parser::Host> &hosts) {
+    for (auto &h : hosts) {
+      if (addr.sin_addr.s_addr == h.ip && addr.sin_port == h.port) {
+        return &h;
+      }
+    }
+    return NULL;
+  }
+
+  PerfectLinkConfig perfectLinkValues() {
     std::ifstream configFile(configPath());
-    perfectLinkConfig values;
+    PerfectLinkConfig values;
     if (!configFile.is_open()) {
       std::ostringstream os;
       os << "`" << configPath() << "` does not exist.";
