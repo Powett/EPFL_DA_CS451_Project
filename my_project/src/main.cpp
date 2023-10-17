@@ -109,14 +109,14 @@ int main(int argc, char **argv) {
 
   // Start listener(s)
   for (int i = 0; i < NLISTENERS; i++) {
-    listenerThreads[i] =
-        thread(&UDPSocket::listener, &sock, &logFile, &logSem, hosts);
+    listenerThreads[i] = thread(&UDPSocket::listener, &sock, &pending, &pendSem,
+                                &logFile, &logSem, std::ref(hosts));
   }
   sem_post(&logSem);
 
   // Build message queue
   if (self_host != dest_host) {
-    for (int i = 0; i < vals.nb_messages; i++) {
+    for (int i = vals.nb_messages - 1; i >= 0; i--) {
       pending = new message{dest_host, to_string(i), 2, pending};
     }
   }
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
   // Send messages
   for (int i = 0; i < NSENDERS; i++) {
     senderThreads[i] = thread(&UDPSocket::sender, &sock, &pending, &pendSem,
-                              &logFile, &logSem, hosts);
+                              &logFile, &logSem, std::ref(hosts));
   }
   sem_post(&pendSem);
 

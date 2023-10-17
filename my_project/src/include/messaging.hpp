@@ -30,8 +30,10 @@ public:
   UDPSocket(in_addr_t, unsigned short = DEFAULTPORT);
   ~UDPSocket();
   ssize_t unicast(const Parser::Host *, const char *, ssize_t, int = 0);
+  ssize_t unicast(sockaddr_in *, const char *, ssize_t, int = 0);
   sockaddr_in recv(char *, ssize_t, int = 0);
-  void listener(std::ofstream *, sem_t *, const std::vector<Parser::Host> &);
+  void listener(messageList *, sem_t *, std::ofstream *, sem_t *,
+                std::vector<Parser::Host> &);
   void sender(messageList *, sem_t *, std::ofstream *, sem_t *,
               const std::vector<Parser::Host> &);
 

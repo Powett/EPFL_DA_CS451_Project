@@ -12,7 +12,7 @@ target_link_libraries(da_proc ${CMAKE_THREAD_LIBS_INIT})
 
 # Mine
 if (ASAN_AVAILABLE)
-echo("hello")
+message("Asan found")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,leak,undefined,thread")
 endif()
 

@@ -19,12 +19,14 @@
 #include <cstring>
 #include <unistd.h>
 
+#include <unordered_set>
+
 class Parser {
 public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)} {
+        : id{id}, port{htons(port)}, seen() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -49,8 +51,19 @@ public:
       return ipReadable() + ":" +
              std::to_string(static_cast<int>(portReadable()));
     }
+    bool markSeenNew(std::string msg) {
+      // Check if was seen already (return true)
+      // Else, mark as seen (return false)
+      if (seen.find(msg) != seen.end()) {
+        return false;
+      }
+      seen.insert(msg);
+      return true;
+    }
 
   private:
+    std::unordered_set<std::string> seen;
+
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
       int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
@@ -95,8 +108,6 @@ public:
       throw std::runtime_error("No host resolves to IPv4");
     }
   };
-
-  Host &findHost(const sockaddr_in &);
 
   struct PerfectLinkConfig {
     int nb_messages;
@@ -200,8 +211,8 @@ public:
     return hosts;
   }
 
-  static const Host *findHost(const sockaddr_in &addr,
-                              const std::vector<Parser::Host> &hosts) {
+  static Host *findHost(const sockaddr_in &addr,
+                        std::vector<Parser::Host> &hosts) {
     for (auto &h : hosts) {
       if (addr.sin_addr.s_addr == h.ip && addr.sin_port == h.port) {
         return &h;
