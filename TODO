@@ -1,6 +1,11 @@
 - move stuff from Host to new class Peer
 - ask about atomic/unordered_map etc use ?
-- functions to put/remove from pendList
+- undebug
+- test w stress ?
+- submit ?
+
+
+
 - mode debug "rapide":
   - décommenter
     // DEBUG(([^/]*\n)+) *// ENDDEBUG
