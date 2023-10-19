@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "messaging.hpp"
+#include "pendinglist.hpp"
 
 UDPSocket::UDPSocket(in_addr_t IP, unsigned short port) {
   struct sockaddr_in sk;
@@ -42,8 +43,10 @@ UDPSocket::~UDPSocket() { close(sockfd); }
 ssize_t UDPSocket::unicast(const Parser::Host *host, const char *buffer,
                            ssize_t len, int flags) {
 
+  // DEBUG
   ttyLog("Sending message to " + host->fullAddressReadable() +
          ", msg: " + buffer);
+  // ENDDEBUG
   sockaddr_in add;
   add.sin_family = AF_INET;
   add.sin_addr.s_addr = host->ip;
@@ -57,48 +60,37 @@ ssize_t UDPSocket::unicast(sockaddr_in *dest, const char *buffer, ssize_t len,
                 reinterpret_cast<sockaddr *>(dest), sizeof(*dest));
 }
 
-sockaddr_in UDPSocket::recv(char *buffer, ssize_t len, int flags) {
-  sockaddr_in from;
+ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
+                        int flags) {
   socklen_t sk_len;
   ssize_t ret = recvfrom(sockfd, buffer, len, flags,
                          reinterpret_cast<sockaddr *>(&from), &sk_len);
   buffer[ret] = 0;
-  return from;
+  return ret;
 }
 
-void UDPSocket::listener(messageList *pending, sem_t *pendSem,
-                         std::ofstream *logFile, sem_t *logSem,
-                         std::vector<Parser::Host> &hosts) {
-  signal(SIGTERM, listener_stop);
-  signal(SIGINT, listener_stop);
-  while (1) {
+void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
+                         sem_t *logSem, std::vector<Parser::Host> &hosts,
+                         bool *stop) {
+
+  while (!(*stop)) {
+    // DEBUG
     ttyLog("Waiting for message");
+    // ENDDEBUG
     char buffer[MAX_PACKET_LENGTH];
-    sockaddr_in from = recv(buffer, MAX_PACKET_LENGTH);
+    sockaddr_in from;
+    while (recv(from, buffer, MAX_PACKET_LENGTH) == -1 && !(*stop))
+      ;
     auto fromHost = Parser::findHost(from, hosts);
+    if (!fromHost) {
+      continue;
+    }
 
     //  check if ack
     if (buffer[0] == 'a') {
-      std::string ackedMsg = std::string(buffer).substr(1);
       // if ack: cleanup list
-      sem_wait(pendSem);
-      message *prev = *pending;
-      if (prev == NULL) {
-        continue;
-      }
-      message *current = prev->next;
-      if (std::strcmp((*pending)->msg.c_str(), ackedMsg.c_str()) == 0) {
-        *pending = current;
-      }
-      while (current) {
-        if (std::strcmp(current->msg.c_str(), ackedMsg.c_str()) == 0) {
-          prev->next = current->next;
-        }
-        prev = current;
-        current = current->next;
-      }
-      sem_post(pendSem);
-
+      std::string ackedMsg = std::string(buffer).substr(1);
+      pending.remove_instances(ackedMsg.c_str());
     } else {
       // else: send ack
       auto ack = "a" + std::string(buffer);
@@ -106,59 +98,62 @@ void UDPSocket::listener(messageList *pending, sem_t *pendSem,
       // put in sending list ?
       unicast(&from, ack.c_str(), ssize_t(std::strlen(ack.c_str())));
 
+      // DEBUG
       ttyLog("Sent ack: " + ack);
+      // ENDDEBUG
 
       // Only log if new ?
       if (fromHost->markSeenNew(buffer)) {
-        std ::cout << "Received from " << fromHost->id << ": " << buffer
-                   << std::endl;
+        // DEBUG
+        ttyLog("Received from " + std::to_string(fromHost->id) + ": " + buffer);
+        // ENDDEBUG
         sem_wait(logSem);
         (*logFile) << "d " << fromHost->id << " " << buffer << std::endl;
         sem_post(logSem);
       }
     }
   }
+  // DEBUG
+  ttyLog("Listener exit");
+  // ENDDEBUG
 }
 
-void UDPSocket::sender(messageList *pending, sem_t *pendSem,
-                       std::ofstream *logFile, sem_t *logSem,
-                       const std::vector<Parser::Host> &hosts) {
-  signal(SIGTERM, sender_stop);
-  signal(SIGINT, sender_stop);
+void UDPSocket::sender(PendingList &pending, std::ofstream *logFile,
+                       sem_t *logSem, const std::vector<Parser::Host> &hosts,
+                       bool *stop) {
+  // DEBUG
   ttyLog("Ready to send");
-  while (1) {
-    sem_wait(pendSem);
-    message *current = *pending;
-    if (current == NULL) {
-      sem_post(pendSem);
+  // ENDDEBUG
+
+  while (!(*stop)) {
+    message *current = pending.pop();
+    if (!current) {
       sleep(1);
       continue;
     }
+
     ssize_t sent =
         unicast(current->destHost, current->msg.c_str(), current->len);
+
     if (sent < 0) {
+      // DEBUG
       ttyLog("Error sending msg!");
+      // ENDDEBUG
       return;
     }
+    // DEBUG
     ttyLog("Sending success");
+    // ENDDEBUG
+
     sem_wait(logSem);
     (*logFile) << "b " << current->msg << std::endl;
     sem_post(logSem);
-    *pending = current->next;
+
     delete current;
-    sem_post(pendSem);
   }
-}
-
-void UDPSocket::sender_stop(int) { exit(0); }
-void UDPSocket::listener_stop(int) { exit(0); }
-
-void cleanup(messageList m) {
-  while (m) {
-    messageList next = m->next;
-    delete m;
-    m = next;
-  }
+  // DEBUG
+  ttyLog("Sender exit");
+  // ENDDEBUG
 }
 
 void ttyLog(std::string message) {

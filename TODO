@@ -1,3 +1,9 @@
 - move stuff from Host to new class Peer
 - ask about atomic/unordered_map etc use ?
 - functions to put/remove from pendList
+- mode debug "rapide":
+  - décommenter
+    // DEBUG(([^/]*\n)+) *// ENDDEBUG
+  - commenter
+    (cout([^;]*\n*)*;)
+    (ttyLog([^;]*\n*)*;)
