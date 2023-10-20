@@ -151,21 +151,23 @@ int main(int argc, char **argv) {
         thread(&UDPSocket::listener, sock, std::ref(pending), &logFile, &logSem,
                std::ref(hosts), &stop_threads);
   }
-  // Allow logging
-  sem_post(&logSem);
 
   // Build message queue
   if (self_host != dest_host) {
-    for (int i = vals.nb_messages - 1; i >= 0; i--) {
-      pending.push(new message{dest_host, to_string(i), 2, nullptr});
+    for (int i = vals.nb_messages; i > 0; i--) {
+      message *current = new message{dest_host, to_string(i), 2, nullptr};
+      pending.push(current);
+      logFile << "b " << current->msg << std::endl;
     }
   }
 
+  // Allow logging for receivers
+  sem_post(&logSem);
+
   // Send messages
   for (int i = 0; i < NSENDERS; i++) {
-    senderThreads[i] =
-        thread(&UDPSocket::sender, sock, std::ref(pending), &logFile, &logSem,
-               std::ref(hosts), &stop_threads);
+    senderThreads[i] = thread(&UDPSocket::sender, sock, std::ref(pending),
+                              std::ref(hosts), &stop_threads);
   }
 
   // DEBUG

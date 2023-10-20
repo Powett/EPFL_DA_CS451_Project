@@ -1,8 +1,10 @@
 - move stuff from Host to new class Peer
 - ask about atomic/unordered_map etc use ?
-- undebug
+
+- undebug 
 - test w stress ?
 - submit ?
+
 
 
 

@@ -118,9 +118,8 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
   // ENDDEBUG
 }
 
-void UDPSocket::sender(PendingList &pending, std::ofstream *logFile,
-                       sem_t *logSem, const std::vector<Parser::Host> &hosts,
-                       bool *stop) {
+void UDPSocket::sender(PendingList &pending,
+                       const std::vector<Parser::Host> &hosts, bool *stop) {
   // DEBUG
   ttyLog("Ready to send");
   // ENDDEBUG
@@ -144,11 +143,6 @@ void UDPSocket::sender(PendingList &pending, std::ofstream *logFile,
     // DEBUG
     ttyLog("Sending success");
     // ENDDEBUG
-
-    sem_wait(logSem);
-    (*logFile) << "b " << current->msg << std::endl;
-    sem_post(logSem);
-
     delete current;
   }
   // DEBUG
@@ -157,5 +151,5 @@ void UDPSocket::sender(PendingList &pending, std::ofstream *logFile,
 }
 
 void ttyLog(std::string message) {
-  std::cout << "Thread " << gettid() << ": " << message << std::endl;
+  std::cout << "Thread " << getgid() << ": " << message << std::endl;
 }

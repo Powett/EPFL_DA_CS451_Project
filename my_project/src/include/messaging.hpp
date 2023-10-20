@@ -30,8 +30,7 @@ public:
   ssize_t recv(sockaddr_in &, char *, ssize_t, int = MSG_DONTWAIT);
   void listener(PendingList &, std::ofstream *, sem_t *,
                 std::vector<Parser::Host> &, bool *);
-  void sender(PendingList &, std::ofstream *, sem_t *,
-              const std::vector<Parser::Host> &, bool *);
+  void sender(PendingList &, const std::vector<Parser::Host> &, bool *);
 
 private:
   int sockfd;
