@@ -8,6 +8,8 @@
 #include "pendinglist.hpp"
 #include <signal.h>
 
+// #define DEBUG_MODE 1
+
 #define NLISTENERS 4
 #define NSENDERS 3
 
@@ -29,10 +31,10 @@ static void stop(int) {
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
 
-  // immediately stop network packet processing
-  // DEBUG
+// immediately stop network packet processing
+#ifdef DEBUG_MODE
   cout << "Stopping network packet processing.\n";
-  // ENDDEBUG
+#endif
   delete sock;
 
   // kill all threads ?
@@ -45,12 +47,12 @@ static void stop(int) {
     (senderThreads[i]).join();
   }
 
-  // Clean pending: automatic destructor
+// Clean pending: automatic destructor
 
-  // Closing logFile
-  // DEBUG
+// Closing logFile
+#ifdef DEBUG_MODE
   cout << "Closing logfile.\n";
-  // ENDDEBUG
+#endif
   logFile.close();
 
   // exit directly from signal handler
@@ -68,79 +70,79 @@ int main(int argc, char **argv) {
   Parser parser(argc, argv);
   parser.parse();
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "My PID: " << getpid() << "\n";
   cout << "From a new terminal type `kill -SIGINT " << getpid()
        << "` or `kill -SIGTERM " << getpid()
        << "` to stop processing packets\n\n";
-  // ENDDEBUG
+#endif
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "My ID: " << parser.id() << "\n\n";
-  // ENDDEBUG
+#endif
 
   // Parse config file
   Parser::PerfectLinkConfig vals = parser.perfectLinkValues();
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "Perfect Link config:" << endl;
   cout << "==========================\n";
   cout << vals.nb_messages << " messages to be sent to " << vals.rID << endl;
   cout << endl;
-  // ENDDEBUG
+#endif
 
-  // Parse hosts file
-  // DEBUG
+// Parse hosts file
+#ifdef DEBUG_MODE
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
-  // ENDDEBUG
+#endif
   auto hosts = parser.hosts();
   Parser::Host *self_host = NULL;
   Parser::Host *dest_host = NULL;
 
   for (auto &host : hosts) {
-    // DEBUG
+#ifdef DEBUG_MODE
     cout << host.id << " : ";
     cout << host.ipReadable() << ":" << host.portReadable() << endl;
     cout << "Machine: " << host.ip << ":" << host.port << endl;
-    // ENDDEBUG
+#endif
     if (host.id == parser.id()) {
       self_host = &host;
-      // DEBUG
+#ifdef DEBUG_MODE
       cout << " [self]";
-      // ENDDEBUG
+#endif
     }
     if (host.id == vals.rID) {
       dest_host = &host;
-      // DEBUG
+#ifdef DEBUG_MODE
       cout << " [dest]";
-      // ENDDEBUG
+#endif
     }
-    // DEBUG
+#ifdef DEBUG_MODE
     cout << endl;
-    // ENDDEBUG
+#endif
   }
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << endl;
-  // ENDDEBUG
+#endif
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "Path to output:\n";
   cout << "===============\n";
   cout << parser.outputPath() << "\n\n";
-  // ENDDEBUG
+#endif
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "Path to config:\n";
   cout << "===============\n";
   cout << parser.configPath() << "\n\n";
   cout << "===============\n";
-  // ENDDEBUG
+#endif
 
-  // Create UDP socket
-  // DEBUG
+// Create UDP socket
+#ifdef DEBUG_MODE
   cout << "Creating socket on " << self_host->ipReadable() << ":"
        << self_host->portReadable() << endl;
-  // ENDDEBUG
+#endif
   sock = new UDPSocket(self_host->ip, self_host->port);
 
   // Open logfile
@@ -163,9 +165,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "Message list:\n" << pending;
-  // ENDDEBUG
+#endif
 
   // Allow logging for receivers (effectively starting listeners)
   sem_post(&logSem);
@@ -176,9 +178,9 @@ int main(int argc, char **argv) {
                               std::ref(hosts), &stop_threads);
   }
 
-  // DEBUG
+#ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";
-  // ENDDEBUG
+#endif
 
   // After a process finishes broadcasting,
   // it waits forever for the delivery of messages.
