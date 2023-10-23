@@ -4,6 +4,7 @@
 #include <iostream>
 #include <netinet/in.h>
 #include <semaphore.h>
+#include <atomic>
 #include <signal.h>
 #include <stdlib.h>
 #include <string>
@@ -73,19 +74,21 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
 
 void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
                          sem_t *logSem, std::vector<Parser::Host> &hosts,
-                         bool *stop) {
-
-  while (!(*stop)) {
+                         std::atomic_bool &flagStop) {
+  while (!flagStop) {
 #ifdef DEBUG_MODE
     ttyLog("[L] Waiting for message");
 #endif
     char buffer[MAX_PACKET_LENGTH];
     sockaddr_in from;
     ssize_t recvd_len = -1;
-    while (recvd_len == -1 && !(*stop))
+    while (recvd_len == -1 && !flagStop)
       recvd_len = recv(from, buffer, MAX_PACKET_LENGTH);
     auto fromHost = Parser::findHost(from, hosts);
-    if (*stop || !fromHost || recvd_len < 2) {
+    if (flagStop || !fromHost || recvd_len < 2) {
+#ifdef DEBUG_MODE
+    ttyLog("[L] Error while receiving");
+#endif
       continue;
     }
 #ifdef DEBUG_MODE
@@ -136,9 +139,8 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 }
 
 void UDPSocket::sender(PendingList &pending,
-                       const std::vector<Parser::Host> &hosts, bool *stop) {
-
-  while (!(*stop)) {
+                       const std::vector<Parser::Host> &hosts, std::atomic_bool &flagStop) {
+  while (!flagStop) {
 #ifdef DEBUG_MODE
     ttyLog("[S] Ready to send");
 #endif

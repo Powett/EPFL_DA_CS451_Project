@@ -1,14 +1,15 @@
 #include <chrono>
 #include <iostream>
 #include <semaphore.h>
-#include <thread>
-#include <signal.h>
+#include <atomic>
 
+#include <signal.h>
+#include <thread>
+
+#include "defines.hpp"
 #include "messaging.hpp"
 #include "parser.hpp"
 #include "pendinglist.hpp"
-#include "defines.hpp"
-
 
 #define NLISTENERS 4
 #define NSENDERS 3
@@ -24,28 +25,33 @@ thread senderThreads[NSENDERS];
 
 PendingList pending;
 
-bool stop_threads = false;
+atomic_bool stopThreads;
 
 static void stop(int) {
-  // reset signal handlers to default
+  // set default handlers
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
 
-// immediately stop network packet processing
+
+  // immediately stop network packet processing
 #ifdef DEBUG_MODE
   cout << "Stopping network packet processing.\n";
 #endif
-  delete sock;
+  // delete sock;
 
   // kill all threads ?
-  stop_threads = true;
+  stopThreads=true;
 
-  // for (int i = 0; i < NLISTENERS; i++) {
-  //   (listenerThreads[i]).join();
-  // }
-  // for (int i = 0; i < NSENDERS; i++) {
-  //   (senderThreads[i]).join();
-  // }
+  for (int i = 0; i < NSENDERS; i++) {
+    if (senderThreads[i].joinable()) {
+      (senderThreads[i]).join();
+    }
+  }
+  for (int i = 0; i < NLISTENERS; i++) {
+    if (listenerThreads[i].joinable()) {
+      (listenerThreads[i]).join();
+    }
+  }
 
 // Clean pending: automatic destructor
 
@@ -138,6 +144,7 @@ int main(int argc, char **argv) {
   cout << "===============\n";
 #endif
 
+stopThreads = false;
 // Create UDP socket
 #ifdef DEBUG_MODE
   cout << "Creating socket on " << self_host->ipReadable() << ":"
@@ -152,7 +159,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < NLISTENERS; i++) {
     listenerThreads[i] =
         thread(&UDPSocket::listener, sock, std::ref(pending), &logFile, &logSem,
-               std::ref(hosts), &stop_threads);
+               std::ref(hosts), std::ref(stopThreads));
   }
 
   // Build message queue
@@ -175,7 +182,7 @@ int main(int argc, char **argv) {
   // Start sender(s)
   for (int i = 0; i < NSENDERS; i++) {
     senderThreads[i] = thread(&UDPSocket::sender, sock, std::ref(pending),
-                              std::ref(hosts), &stop_threads);
+                              std::ref(hosts), std::ref(stopThreads));
   }
 
 #ifdef DEBUG_MODE

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <csignal>
 #include <netinet/in.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -33,8 +35,9 @@ public:
   ssize_t unicast(sockaddr_in *, const char *, ssize_t, int = 0);
   ssize_t recv(sockaddr_in &, char *, ssize_t, int = MSG_DONTWAIT);
   void listener(PendingList &, std::ofstream *, sem_t *,
-                std::vector<Parser::Host> &, bool *);
-  void sender(PendingList &, const std::vector<Parser::Host> &, bool *);
+                std::vector<Parser::Host> &, std::atomic_bool &);
+  void sender(PendingList &, const std::vector<Parser::Host> &,
+              std::atomic_bool &);
 
 private:
   int sockfd;
