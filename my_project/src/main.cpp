@@ -40,12 +40,12 @@ static void stop(int) {
   // kill all threads ?
   stop_threads = true;
 
-  for (int i = 0; i < NLISTENERS; i++) {
-    (listenerThreads[i]).join();
-  }
-  for (int i = 0; i < NSENDERS; i++) {
-    (senderThreads[i]).join();
-  }
+  // for (int i = 0; i < NLISTENERS; i++) {
+  //   (listenerThreads[i]).join();
+  // }
+  // for (int i = 0; i < NSENDERS; i++) {
+  //   (senderThreads[i]).join();
+  // }
 
 // Clean pending: automatic destructor
 
