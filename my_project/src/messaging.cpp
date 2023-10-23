@@ -13,6 +13,8 @@
 
 #include "messaging.hpp"
 #include "pendinglist.hpp"
+#include "defines.hpp"
+
 
 UDPSocket::UDPSocket(in_addr_t IP, unsigned short port) {
   struct sockaddr_in sk;
@@ -112,7 +114,6 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 #ifdef DEBUG_MODE
       ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
 #endif
-
       // If new, log into file
       if (fromHost->markSeenNew(msg)) {
         sem_wait(logSem);

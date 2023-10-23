@@ -2,13 +2,13 @@
 #include <iostream>
 #include <semaphore.h>
 #include <thread>
+#include <signal.h>
 
 #include "messaging.hpp"
 #include "parser.hpp"
 #include "pendinglist.hpp"
-#include <signal.h>
+#include "defines.hpp"
 
-// #define DEBUG_MODE 1
 
 #define NLISTENERS 4
 #define NSENDERS 3
