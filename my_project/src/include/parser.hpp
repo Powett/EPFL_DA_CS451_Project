@@ -19,6 +19,7 @@
 #include <cstring>
 #include <unistd.h>
 
+#include <semaphore.h>
 #include <unordered_set>
 
 class Parser {
@@ -33,6 +34,7 @@ public:
       } else {
         ip = ipLookup(ip_or_hostname.c_str());
       }
+      sem_post(&seen_sem);
     }
 
     std::string ipReadable() const {
@@ -54,15 +56,19 @@ public:
     bool markSeenNew(std::string msg) {
       // Check if was seen already (return true)
       // Else, mark as seen (return false)
+      sem_wait(&seen_sem);
       if (seen.find(msg) != seen.end()) {
+        sem_post(&seen_sem);
         return false;
       }
       seen.insert(msg);
+      sem_post(&seen_sem);
       return true;
     }
 
   private:
     std::unordered_set<std::string> seen;
+    sem_t seen_sem;
 
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
