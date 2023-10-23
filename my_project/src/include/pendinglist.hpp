@@ -1,4 +1,5 @@
 #pragma once
+#include <ostream>
 #include <semaphore.h>
 
 struct message;
@@ -9,8 +10,9 @@ public:
   PendingList() : first(nullptr), sem() { sem_post(&sem); }
   void push(message *);
   void push_last(message *);
-  void remove_instances(const char *);
+  int remove_instances(const std::string);
   message *pop();
+  std::ostream &display(std::ostream &out);
   ~PendingList();
 
 private:
@@ -18,3 +20,5 @@ private:
   sem_t sem;
   bool empty();
 };
+
+std::ostream &operator<<(std::ostream &out, PendingList &pend);

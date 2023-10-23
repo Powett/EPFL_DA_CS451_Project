@@ -82,6 +82,7 @@ dkms.conf
 # End of https://www.toptal.com/developers/gitignore/api/c,c++
 
 # Custom
+.vscode/
 my_project/tmp/
 my_project/.vscode/
 my_project/bin/da_proc

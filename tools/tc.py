@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 
-import os, atexit
+import os
+import atexit
 import textwrap
 
+
 class TC:
-    def __init__(self, losses, interface="lo", needSudo=True, sudoPassword="dcl"):
+    def __init__(self, losses, interface="lo", needSudo=False, sudoPassword=""):
         self.losses = losses
         self.interface = interface
         self.needSudo = needSudo
         self.sudoPassword = sudoPassword
 
-        cmd1 = 'tc qdisc add dev {} root netem 2>/dev/null'.format(self.interface)
-        cmd2 = 'tc qdisc change dev {} root netem delay {} {} distribution normal loss {} {} reorder {} {}'.format(self.interface, *self.losses['delay'], *self.losses['loss'], *self.losses['reordering'])
+        cmd1 = 'tc qdisc add dev {} root netem 2>/dev/null'.format(
+            self.interface)
+        cmd2 = 'tc qdisc change dev {} root netem delay {} {} distribution normal loss {} {} reorder {} {}'.format(
+            self.interface, *self.losses['delay'], *self.losses['loss'], *self.losses['reordering'])
 
         if self.needSudo:
             os.system("echo {} | sudo -S {}".format(self.sudoPassword, cmd1))
@@ -43,12 +47,13 @@ class TC:
         else:
             os.system(cmd)
 
+
 if __name__ == "__main__":
     # Network configuration using the tc command
     config = {
         'delay': ('200ms', '50ms'),
-        'loss': ('10%', '25%'),
-        'reordering': ('25%', '50%')
+        'loss': ('45%', '25%'),
+        'reordering': ('65%', '50%')
     }
 
     print("Do not have multiple instances of this script executing at the same time!\n")

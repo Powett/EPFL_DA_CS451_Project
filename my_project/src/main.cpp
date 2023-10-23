@@ -37,6 +37,7 @@ static void stop(int) {
 
   // kill all threads ?
   stop_threads = true;
+
   for (int i = 0; i < NLISTENERS; i++) {
     (listenerThreads[i]).join();
   }
@@ -154,17 +155,22 @@ int main(int argc, char **argv) {
 
   // Build message queue
   if (self_host != dest_host) {
-    for (int i = vals.nb_messages; i > 0; i--) {
-      message *current = new message{dest_host, to_string(i), 2, nullptr};
-      pending.push(current);
+    for (int i = 1; i <= vals.nb_messages; i++) {
+      message *current =
+          new message{dest_host, to_string(i), to_string(i).length() + 1};
+      pending.push_last(current);
       logFile << "b " << current->msg << std::endl;
     }
   }
 
-  // Allow logging for receivers
+  // DEBUG
+  cout << "Message list:\n" << pending;
+  // ENDDEBUG
+
+  // Allow logging for receivers (effectively starting listeners)
   sem_post(&logSem);
 
-  // Send messages
+  // Start sender(s)
   for (int i = 0; i < NSENDERS; i++) {
     senderThreads[i] = thread(&UDPSocket::sender, sock, std::ref(pending),
                               std::ref(hosts), &stop_threads);

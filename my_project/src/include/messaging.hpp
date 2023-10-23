@@ -15,9 +15,13 @@
 #define DEFAULTPORT 0
 
 struct message {
+  message(Parser::Host *d, std::string m, size_t n, bool ack = false,
+          message *next = nullptr)
+      : destHost(d), msg(m), len(n), ack(ack), next(next){};
   Parser::Host *destHost;
   std::string msg;
-  ssize_t len;
+  size_t len;
+  bool ack;
   message *next;
 };
 

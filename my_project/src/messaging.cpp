@@ -44,7 +44,7 @@ ssize_t UDPSocket::unicast(const Parser::Host *host, const char *buffer,
                            ssize_t len, int flags) {
 
   // DEBUG
-  ttyLog("Sending message to " + host->fullAddressReadable() +
+  ttyLog("Sending (full) message to " + host->fullAddressReadable() +
          ", msg: " + buffer);
   // ENDDEBUG
   sockaddr_in add;
@@ -75,81 +75,105 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 
   while (!(*stop)) {
     // DEBUG
-    ttyLog("Waiting for message");
+    ttyLog("[L] Waiting for message");
     // ENDDEBUG
     char buffer[MAX_PACKET_LENGTH];
     sockaddr_in from;
-    while (recv(from, buffer, MAX_PACKET_LENGTH) == -1 && !(*stop))
-      ;
+    ssize_t recvd_len = -1;
+    while (recvd_len == -1 && !(*stop))
+      recvd_len = recv(from, buffer, MAX_PACKET_LENGTH);
     auto fromHost = Parser::findHost(from, hosts);
-    if (!fromHost) {
+    if (*stop || !fromHost || recvd_len < 2) {
       continue;
     }
+    // DEBUG
+    ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) + ": " +
+           buffer);
+    // ENDDEBUG
 
-    //  check if ack
-    if (buffer[0] == 'a') {
-      // if ack: cleanup list
-      std::string ackedMsg = std::string(buffer).substr(1);
-      pending.remove_instances(ackedMsg.c_str());
-    } else {
-      // else: send ack
-      auto ack = "a" + std::string(buffer);
-
-      // put in sending list ?
-      unicast(&from, ack.c_str(), ssize_t(std::strlen(ack.c_str())));
-
+    std::string msg = std::string(buffer).substr(1);
+    switch (buffer[0]) {
+    case 'a': {
+      // Ack
       // DEBUG
-      ttyLog("Sent ack: " + ack);
+      ttyLog("[L] Received ack for msg: " + msg);
+      // ENDDEBUG
+      int nb = pending.remove_instances(msg);
+      // DEBUG
+      ttyLog("[L] Removed " + std::to_string(nb) + " instances of " + msg);
+      // ENDDEBUG
+      break;
+    }
+
+    case 'b': {
+      // Normal
+      message *ackMessage = new message{fromHost, msg, size_t(recvd_len), true};
+      pending.push(ackMessage);
+      // DEBUG
+      ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
       // ENDDEBUG
 
-      // Only log if new ?
-      if (fromHost->markSeenNew(buffer)) {
-        // DEBUG
-        ttyLog("Received from " + std::to_string(fromHost->id) + ": " + buffer);
-        // ENDDEBUG
+      // If new, log into file
+      if (fromHost->markSeenNew(msg)) {
         sem_wait(logSem);
-        (*logFile) << "d " << fromHost->id << " " << buffer << std::endl;
+        (*logFile) << "d " << fromHost->id << " " << msg << std::endl;
         sem_post(logSem);
       }
+      break;
+    }
+    default: {
+      // DEBUG
+      ttyLog("[L] Received weird message! Skipping...");
+      continue;
+      // ENDDEBUG
+    }
     }
   }
   // DEBUG
-  ttyLog("Listener exit");
+  ttyLog("[L] Listener exit");
   // ENDDEBUG
 }
 
 void UDPSocket::sender(PendingList &pending,
                        const std::vector<Parser::Host> &hosts, bool *stop) {
-  // DEBUG
-  ttyLog("Ready to send");
-  // ENDDEBUG
 
   while (!(*stop)) {
+    // DEBUG
+    ttyLog("[S] Ready to send");
+    // ENDDEBUG
     message *current = pending.pop();
     if (!current) {
+      // DEBUG
+      ttyLog("[S] Sending queue empty, sleeping for 1s...");
+      // ENDDEBUG
       sleep(1);
       continue;
     }
-
+    // Add correct directional byte
+    auto full_text = (current->ack ? "a" : "b") + current->msg;
     ssize_t sent =
-        unicast(current->destHost, current->msg.c_str(), current->len);
+        unicast(current->destHost, full_text.c_str(), current->len + 1);
 
     if (sent < 0) {
       // DEBUG
-      ttyLog("Error sending msg!");
+      ttyLog("[S] Error sending msg!");
       // ENDDEBUG
       return;
     }
-    // DEBUG
-    ttyLog("Sending success");
-    // ENDDEBUG
-    delete current;
+    if (!current->ack) {
+      // DEBUG
+      ttyLog("[S] Repushing message in line");
+      // ENDDEBUG
+      pending.push_last(current);
+    } else {
+      delete current;
+    }
   }
   // DEBUG
-  ttyLog("Sender exit");
+  ttyLog("[S] Sender exit");
   // ENDDEBUG
 }
 
 void ttyLog(std::string message) {
-  std::cout << "Thread " << getgid() << ": " << message << std::endl;
+  std::cout << "Thread " << gettid() << ": " << message << std::endl;
 }
