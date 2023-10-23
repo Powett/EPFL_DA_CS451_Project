@@ -34,7 +34,6 @@ public:
       } else {
         ip = ipLookup(ip_or_hostname.c_str());
       }
-      sem_post(&seen_sem);
     }
 
     std::string ipReadable() const {
@@ -53,22 +52,14 @@ public:
       return ipReadable() + ":" +
              std::to_string(static_cast<int>(portReadable()));
     }
-    bool markSeenNew(std::string msg) {
-      // Check if was seen already (return true)
-      // Else, mark as seen (return false)
-      sem_wait(&seen_sem);
-      if (seen.find(msg) != seen.end()) {
-        sem_post(&seen_sem);
-        return false;
-      }
-      seen.insert(msg);
-      sem_post(&seen_sem);
-      return true;
+    bool tryMarkSeen(std::string msg) {
+      // Not thread-safe!
+      // Try to mark as seen: if already seen return false
+      return seen.insert(msg).second;
     }
 
   private:
     std::unordered_set<std::string> seen;
-    sem_t seen_sem;
 
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;

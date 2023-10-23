@@ -115,11 +115,11 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
 #endif
       // If new, log into file
-      if (fromHost->markSeenNew(msg)) {
-        sem_wait(logSem);
+      sem_wait(logSem);
+      if (fromHost->tryMarkSeen(msg)) {
         (*logFile) << "d " << fromHost->id << " " << msg << std::endl;
-        sem_post(logSem);
       }
+      sem_post(logSem);
       break;
     }
     default: {
