@@ -10,6 +10,7 @@ public:
   PendingList() : first(nullptr), last(nullptr), sem() { sem_post(&sem); }
   void push(message *);
   void push_last(message *);
+  void unsafe_push_last(message *);
   int remove_instances(const std::string);
   message *pop();
   std::ostream &display(std::ostream &out);

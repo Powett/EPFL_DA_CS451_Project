@@ -18,6 +18,7 @@ using namespace std;
 
 ofstream logFile;
 sem_t logSem;
+
 thread listenerThreads[NLISTENERS];
 thread senderThreads[NSENDERS];
 
@@ -156,7 +157,7 @@ int main(int argc, char **argv) {
     for (int i = 1; i <= vals.nb_messages; i++) {
       message *current =
           new message{dest_host, to_string(i), to_string(i).length() + 1};
-      pending.push_last(current);
+      pending.unsafe_push_last(current); // no multithreading yet
       logFile << "b " << current->msg << std::endl;
     }
   }
@@ -164,7 +165,7 @@ int main(int argc, char **argv) {
 #ifdef DEBUG_MODE
   cout << "Message list:\n" << pending << endl;
 #endif
-  // Allow logging for receivers
+  // Allow logging for listeners
   sem_post(&logSem);
 
   // Start listener(s)

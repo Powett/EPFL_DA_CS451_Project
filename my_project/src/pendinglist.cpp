@@ -13,17 +13,20 @@ void PendingList::push(message *m) {
   }
   sem_post(&sem);
 }
-void PendingList::push_last(message *m) {
+void PendingList::unsafe_push_last(message *m) {
   m->next = nullptr; // sanity
-  sem_wait(&sem);
   if (empty()) {
     first = m;
     last = m;
-    sem_post(&sem);
     return;
   }
   last->next = m;
   last = m;
+}
+
+void PendingList::push_last(message *m) {
+  sem_wait(&sem);
+  unsafe_push_last(m);
   sem_post(&sem);
 }
 
