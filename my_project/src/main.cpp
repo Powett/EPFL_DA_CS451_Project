@@ -16,8 +16,6 @@
 
 using namespace std;
 
-UDPSocket *sock;
-
 ofstream logFile;
 sem_t logSem;
 thread listenerThreads[NLISTENERS];
@@ -36,9 +34,8 @@ static void stop(int) {
 #ifdef DEBUG_MODE
   cout << "Stopping network packet processing.\n";
 #endif
-  delete sock;
 
-  // kill all threads ?
+  // kill all threads
   stopThreads = true;
 
   for (int i = 0; i < NSENDERS; i++) {
@@ -149,7 +146,7 @@ int main(int argc, char **argv) {
   cout << "Creating socket on " << self_host->ipReadable() << ":"
        << self_host->portReadable() << endl;
 #endif
-  sock = new UDPSocket(self_host->ip, self_host->port);
+  UDPSocket sock = UDPSocket(self_host->ip, self_host->port);
 
   // Open logfile
   logFile.open(parser.outputPath());
@@ -167,20 +164,19 @@ int main(int argc, char **argv) {
 #ifdef DEBUG_MODE
   cout << "Message list:\n" << pending << endl;
 #endif
+  // Allow logging for receivers
+  sem_post(&logSem);
 
   // Start listener(s)
   for (int i = 0; i < NLISTENERS; i++) {
     listenerThreads[i] =
-        thread(&UDPSocket::listener, sock, std::ref(pending), &logFile, &logSem,
-               std::ref(hosts), std::ref(stopThreads));
+        thread(&UDPSocket::listener, &sock, std::ref(pending), &logFile,
+               &logSem, std::ref(hosts), std::ref(stopThreads));
   }
-
-  // Allow logging for receivers (effectively starting listeners)
-  sem_post(&logSem);
 
   // Start sender(s)
   for (int i = 0; i < NSENDERS; i++) {
-    senderThreads[i] = thread(&UDPSocket::sender, sock, std::ref(pending),
+    senderThreads[i] = thread(&UDPSocket::sender, &sock, std::ref(pending),
                               std::ref(hosts), std::ref(stopThreads));
   }
 
