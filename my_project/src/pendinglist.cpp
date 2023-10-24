@@ -2,24 +2,28 @@
 #include "messaging.hpp"
 
 void PendingList::push(message *m) {
-  sem_wait(&sem);
-  m->next = first;
-  first = m;
-  sem_post(&sem);
-}
-void PendingList::push_last(message *m) {
+  m->next = nullptr; // sanity
   sem_wait(&sem);
   if (empty()) {
     first = m;
+    last = m;
+  } else {
+    m->next = first;
+    first = m;
+  }
+  sem_post(&sem);
+}
+void PendingList::push_last(message *m) {
+  m->next = nullptr; // sanity
+  sem_wait(&sem);
+  if (empty()) {
+    first = m;
+    last = m;
     sem_post(&sem);
     return;
   }
-  message *current = first;
-  while (current->next) {
-    current = current->next;
-  }
-  current->next = m;
-  m->next = nullptr; // sanity
+  last->next = m;
+  last = m;
   sem_post(&sem);
 }
 
@@ -37,6 +41,7 @@ int PendingList::remove_instances(const std::string str) {
     delete prev;
     nb++;
     if (!first) {
+      last = nullptr; // we removed the whole list
       sem_post(&sem);
       return nb;
     }
@@ -46,6 +51,9 @@ int PendingList::remove_instances(const std::string str) {
   while (current) {
     if (current->msg == str) {
       prev->next = current->next;
+      if (current == last) { // we removed the last element
+        last = prev;
+      }
       delete current;
       nb++;
     } else {
@@ -59,10 +67,16 @@ int PendingList::remove_instances(const std::string str) {
 
 message *PendingList::pop() {
   sem_wait(&sem);
+  if (empty()) {
+    sem_post(&sem);
+    return nullptr;
+  }
   message *prev = first;
-  if (!empty()) {
+  if (first == last) { // only one element
+    last = nullptr;
+    first = nullptr;
+  } else {
     first = first->next;
-    prev->next = nullptr;
   }
   sem_post(&sem);
   return prev;
@@ -75,9 +89,9 @@ std::ostream &PendingList::display(std::ostream &out) {
   message *current = first;
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
-        << (current->ack ? "a/" : "b/") << " \"" << current->msg << "\"["
+        << (current->ack ? " a" : " b") << "\"" << current->msg << "\"["
         << std::to_string(current->len) << "]|";
-    if (current->next) {
+    if (current != last) {
       out << "->";
     }
     current = current->next;

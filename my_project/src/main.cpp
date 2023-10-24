@@ -1,7 +1,7 @@
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <semaphore.h>
-#include <atomic>
 
 #include <signal.h>
 #include <thread>
@@ -32,15 +32,14 @@ static void stop(int) {
   signal(SIGTERM, SIG_DFL);
   signal(SIGINT, SIG_DFL);
 
-
   // immediately stop network packet processing
 #ifdef DEBUG_MODE
   cout << "Stopping network packet processing.\n";
 #endif
-  // delete sock;
+  delete sock;
 
   // kill all threads ?
-  stopThreads=true;
+  stopThreads = true;
 
   for (int i = 0; i < NSENDERS; i++) {
     if (senderThreads[i].joinable()) {
@@ -144,7 +143,7 @@ int main(int argc, char **argv) {
   cout << "===============\n";
 #endif
 
-stopThreads = false;
+  stopThreads = false;
 // Create UDP socket
 #ifdef DEBUG_MODE
   cout << "Creating socket on " << self_host->ipReadable() << ":"
@@ -154,13 +153,6 @@ stopThreads = false;
 
   // Open logfile
   logFile.open(parser.outputPath());
-
-  // Start listener(s)
-  for (int i = 0; i < NLISTENERS; i++) {
-    listenerThreads[i] =
-        thread(&UDPSocket::listener, sock, std::ref(pending), &logFile, &logSem,
-               std::ref(hosts), std::ref(stopThreads));
-  }
 
   // Build message queue
   if (self_host != dest_host) {
@@ -173,8 +165,15 @@ stopThreads = false;
   }
 
 #ifdef DEBUG_MODE
-  cout << "Message list:\n" << pending;
+  cout << "Message list:\n" << pending << endl;
 #endif
+
+  // Start listener(s)
+  for (int i = 0; i < NLISTENERS; i++) {
+    listenerThreads[i] =
+        thread(&UDPSocket::listener, sock, std::ref(pending), &logFile, &logSem,
+               std::ref(hosts), std::ref(stopThreads));
+  }
 
   // Allow logging for receivers (effectively starting listeners)
   sem_post(&logSem);

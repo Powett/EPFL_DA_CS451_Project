@@ -1,10 +1,10 @@
 #include <arpa/inet.h>
+#include <atomic>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <netinet/in.h>
 #include <semaphore.h>
-#include <atomic>
 #include <signal.h>
 #include <stdlib.h>
 #include <string>
@@ -12,10 +12,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "defines.hpp"
 #include "messaging.hpp"
 #include "pendinglist.hpp"
-#include "defines.hpp"
-
 
 UDPSocket::UDPSocket(in_addr_t IP, unsigned short port) {
   struct sockaddr_in sk;
@@ -87,7 +86,7 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     auto fromHost = Parser::findHost(from, hosts);
     if (flagStop || !fromHost || recvd_len < 2) {
 #ifdef DEBUG_MODE
-    ttyLog("[L] Error while receiving");
+      ttyLog("[L] Error while receiving");
 #endif
       continue;
     }
@@ -139,7 +138,8 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 }
 
 void UDPSocket::sender(PendingList &pending,
-                       const std::vector<Parser::Host> &hosts, std::atomic_bool &flagStop) {
+                       const std::vector<Parser::Host> &hosts,
+                       std::atomic_bool &flagStop) {
   while (!flagStop) {
 #ifdef DEBUG_MODE
     ttyLog("[S] Ready to send");
@@ -148,8 +148,8 @@ void UDPSocket::sender(PendingList &pending,
     if (!current) {
 #ifdef DEBUG_MODE
       ttyLog("[S] Sending queue empty, sleeping for 1s...");
-#endif
       sleep(1);
+#endif
       continue;
     }
     // Add correct directional byte
