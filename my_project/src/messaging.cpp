@@ -127,8 +127,8 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     default: {
 #ifdef DEBUG_MODE
       ttyLog("[L] Received weird message! Skipping...");
-      continue;
 #endif
+      continue;
     }
     }
   }
