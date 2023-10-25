@@ -86,5 +86,5 @@ dkms.conf
 my_project/tmp/
 my_project/.vscode/
 my_project/bin/da_proc
-my_project/submission1.zip
+my_project/*.zip
 tmp/
