@@ -144,7 +144,6 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       continue;
     }
     }
-    usleep(500);
   }
 #ifdef DEBUG_MODE
   ttyLog("[L] Listener exit");
@@ -161,9 +160,8 @@ void UDPSocket::sender(PendingList &pending,
     message *current = pending.pop();
     if (!current) {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Sending queue empty, sleeping for 100µs...");
+      ttyLog("[S] Sending queue empty...");
 #endif
-      // usleep(100);
       continue;
     }
     // Add correct directional byte
