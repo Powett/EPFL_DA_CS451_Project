@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <atomic>
 #include <cstring>
+#include <errno.h>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
@@ -69,11 +70,13 @@ ssize_t UDPSocket::unicast(sockaddr_in *dest, const char *buffer, ssize_t len,
 
 ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
                         int flags) {
-  socklen_t sk_len;
+  socklen_t sk_len(sizeof(from));
   ssize_t ret = recvfrom(sockfd, buffer, len, flags,
                          reinterpret_cast<sockaddr *>(&from), &sk_len);
   if (ret > 0) {
     buffer[ret] = 0;
+  } else if (ret == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    std::cerr << "Error when receiving: " << std::strerror(errno) << std::endl;
   }
   return ret;
 }
@@ -141,6 +144,7 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       continue;
     }
     }
+    usleep(500);
   }
 #ifdef DEBUG_MODE
   ttyLog("[L] Listener exit");
