@@ -19,7 +19,6 @@
 #include <cstring>
 #include <unistd.h>
 
-#include <semaphore.h>
 #include <unordered_set>
 
 class Parser {

@@ -1,13 +1,13 @@
 #pragma once
+#include <mutex>
 #include <ostream>
-#include <semaphore.h>
 
 struct message;
 
 // Thread-safe LinkedList to store messages
 class PendingList {
 public:
-  PendingList() : first(nullptr), last(nullptr), sem() { sem_post(&sem); }
+  PendingList() : first(nullptr), last(nullptr), mut() {}
   void push(message *);
   void push_last(message *);
   void unsafe_push_last(message *);
@@ -19,7 +19,7 @@ public:
 private:
   message *first;
   message *last;
-  sem_t sem;
+  std::mutex mut;
   bool empty();
 };
 

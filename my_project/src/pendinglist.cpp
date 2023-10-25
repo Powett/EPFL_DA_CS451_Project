@@ -3,7 +3,7 @@
 
 void PendingList::push(message *m) {
   m->next = nullptr; // sanity
-  sem_wait(&sem);
+  mut.lock();
   if (empty()) {
     first = m;
     last = m;
@@ -11,7 +11,7 @@ void PendingList::push(message *m) {
     m->next = first;
     first = m;
   }
-  sem_post(&sem);
+  mut.unlock();
 }
 void PendingList::unsafe_push_last(message *m) {
   m->next = nullptr; // sanity
@@ -25,16 +25,16 @@ void PendingList::unsafe_push_last(message *m) {
 }
 
 void PendingList::push_last(message *m) {
-  sem_wait(&sem);
+  mut.lock();
   unsafe_push_last(m);
-  sem_post(&sem);
+  mut.unlock();
 }
 
 int PendingList::remove_instances(const std::string str) {
   int nb = 0;
-  sem_wait(&sem);
+  mut.lock();
   if (empty()) {
-    sem_post(&sem);
+    mut.unlock();
     return nb;
   }
   message *prev;
@@ -45,7 +45,7 @@ int PendingList::remove_instances(const std::string str) {
     nb++;
     if (!first) {
       last = nullptr; // we removed the whole list
-      sem_post(&sem);
+      mut.unlock();
       return nb;
     }
   }
@@ -64,14 +64,14 @@ int PendingList::remove_instances(const std::string str) {
     }
     current = prev->next;
   }
-  sem_post(&sem);
+  mut.unlock();
   return nb;
 }
 
 message *PendingList::pop() {
-  sem_wait(&sem);
+  mut.lock();
   if (empty()) {
-    sem_post(&sem);
+    mut.unlock();
     return nullptr;
   }
   message *prev = first;
@@ -81,14 +81,14 @@ message *PendingList::pop() {
   } else {
     first = first->next;
   }
-  sem_post(&sem);
+  mut.unlock();
   return prev;
 }
 
 bool PendingList::empty() { return first == nullptr; }
 
 std::ostream &PendingList::display(std::ostream &out) {
-  sem_wait(&sem);
+  mut.lock();
   message *current = first;
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
@@ -99,7 +99,7 @@ std::ostream &PendingList::display(std::ostream &out) {
     }
     current = current->next;
   }
-  sem_post(&sem);
+  mut.unlock();
   return out;
 }
 

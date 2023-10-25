@@ -1,10 +1,11 @@
 #include <arpa/inet.h>
 #include <atomic>
 #include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <netinet/in.h>
-#include <semaphore.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string>
@@ -37,6 +38,10 @@ UDPSocket::UDPSocket(in_addr_t IP, unsigned short port) {
     perror("bind failed");
     exit(EXIT_FAILURE);
   }
+
+  // Set socket as non-blocking
+  int flags = fcntl(this->sockfd, F_GETFL, 0);
+  fcntl(this->sockfd, F_SETFL, flags | O_NONBLOCK);
   return;
 }
 
@@ -67,12 +72,14 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
   socklen_t sk_len;
   ssize_t ret = recvfrom(sockfd, buffer, len, flags,
                          reinterpret_cast<sockaddr *>(&from), &sk_len);
-  buffer[ret] = 0;
+  if (ret > 0) {
+    buffer[ret] = 0;
+  }
   return ret;
 }
 
 void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
-                         sem_t *logSem, std::vector<Parser::Host> &hosts,
+                         std::mutex &logMutex, std::vector<Parser::Host> &hosts,
                          std::atomic_bool &flagStop) {
   while (!flagStop) {
 #ifdef DEBUG_MODE
@@ -117,11 +124,14 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
 #endif
       // If new, log into file
-      sem_wait(logSem);
+      logMutex.lock();
       if (fromHost->tryMarkSeen(msg)) {
+#ifdef DEBUG_MODE
+        ttyLog("[L] Was new: " + ackMessage->msg);
+#endif
         (*logFile) << "d " << fromHost->id << " " << msg << std::endl;
       }
-      sem_post(logSem);
+      logMutex.unlock();
       break;
     }
     default: {
@@ -147,9 +157,9 @@ void UDPSocket::sender(PendingList &pending,
     message *current = pending.pop();
     if (!current) {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Sending queue empty, sleeping for 1s...");
-      sleep(1);
+      ttyLog("[S] Sending queue empty, sleeping for 100µs...");
 #endif
+      // usleep(100);
       continue;
     }
     // Add correct directional byte
@@ -161,7 +171,11 @@ void UDPSocket::sender(PendingList &pending,
 #ifdef DEBUG_MODE
       ttyLog("[S] Error sending msg!");
 #endif
-      return;
+      continue;
+    } else {
+#ifdef DEBUG_MODE
+      ttyLog("[S] Sent: " + full_text);
+#endif
     }
     if (!current->ack) {
 #ifdef DEBUG_MODE

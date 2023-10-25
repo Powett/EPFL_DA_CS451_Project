@@ -1,7 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
-#include <semaphore.h>
+#include <mutex>
 
 #include <signal.h>
 #include <thread>
@@ -17,7 +17,7 @@
 using namespace std;
 
 ofstream logFile;
-sem_t logSem;
+std::mutex logMutex;
 
 thread listenerThreads[NLISTENERS];
 thread senderThreads[NSENDERS];
@@ -165,14 +165,12 @@ int main(int argc, char **argv) {
 #ifdef DEBUG_MODE
   cout << "Message list:\n" << pending << endl;
 #endif
-  // Allow logging for listeners
-  sem_post(&logSem);
 
   // Start listener(s)
   for (int i = 0; i < NLISTENERS; i++) {
     listenerThreads[i] =
         thread(&UDPSocket::listener, &sock, std::ref(pending), &logFile,
-               &logSem, std::ref(hosts), std::ref(stopThreads));
+               std::ref(logMutex), std::ref(hosts), std::ref(stopThreads));
   }
 
   // Start sender(s)
