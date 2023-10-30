@@ -85,11 +85,45 @@ int main(int argc, char **argv) {
 #endif
 
   // Parse config file
-  Parser::PerfectLinkConfig vals = parser.perfectLinkValues();
+  Parser::PerfectLinkConfig pl_vals;
+  Parser::FIFOBroadcastConfig fifo_vals;
+
+  switch (PROJECT_PART) {
+  case 0: {
+    pl_vals = parser.perfectLinkValues();
+    break;
+  }
+  case 1: {
+    fifo_vals = parser.fifoBroadcastValues();
+    break;
+  }
+  case 2: {
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 #ifdef DEBUG_MODE
-  cout << "Perfect Link config:" << endl;
-  cout << "==========================\n";
-  cout << vals.nb_messages << " messages to be sent to " << vals.rID << endl;
+  switch (PROJECT_PART) {
+  case 0: {
+    cout << "Perfect Link config:" << endl;
+    cout << "==========================\n";
+    cout << pl_vals.nb_messages << " messages to be sent to " << pl_vals.rID
+         << endl;
+    break;
+  }
+  case 1: {
+    cout << "FIFO Broadcast config:" << endl;
+    cout << "==========================\n";
+    cout << pl_vals.nb_messages << " messages to be sent to " << pl_vals.rID
+         << endl;
+    break;
+  }
+  default: {
+    break;
+  }
+  }
   cout << endl;
 #endif
 
@@ -114,7 +148,7 @@ int main(int argc, char **argv) {
       cout << " [self]";
 #endif
     }
-    if (host.id == vals.rID) {
+    if (PROJECT_PART == 0 && host.id == pl_vals.rID) {
       dest_host = &host;
 #ifdef DEBUG_MODE
       cout << " [dest]";
@@ -153,13 +187,35 @@ int main(int argc, char **argv) {
   logFile.open(parser.outputPath());
 
   // Build message queue
-  if (self_host != dest_host) {
-    for (int i = 1; i <= vals.nb_messages; i++) {
-      message *current =
-          new message{dest_host, to_string(i), to_string(i).length() + 1};
-      pending.unsafe_push_last(current); // no multithreading yet
-      logFile << "b " << current->msg << std::endl;
+  switch (PROJECT_PART) {
+  case 0: {
+    if (self_host != dest_host) {
+      for (int i = 1; i <= pl_vals.nb_messages; i++) {
+        message *current =
+            new message{dest_host, to_string(i), to_string(i).length() + 1};
+        pending.unsafe_push_last(current); // no multithreading yet
+        logFile << "b " << current->msg << std::endl;
+      }
     }
+    break;
+  }
+  case 1: {
+    for (int i = 1; i <= pl_vals.nb_messages; i++) {
+      for (auto &host : hosts) {
+        message *current =
+            new message{&host, to_string(i), to_string(i).length() + 1};
+        pending.unsafe_push_last(current); // no multithreading yet
+        logFile << "b " << current->msg << std::endl;
+      }
+    }
+    break;
+  }
+  case 2: {
+    break;
+  }
+  default: {
+    break;
+  }
   }
 
 #ifdef DEBUG_MODE

@@ -68,6 +68,44 @@ int PendingList::remove_instances(const std::string str) {
   return nb;
 }
 
+int PendingList::remove_older(const int seq) {
+  int nb = 0;
+  mut.lock();
+  if (empty()) {
+    mut.unlock();
+    return nb;
+  }
+  message *prev;
+  while (stoi(first->msg) <= seq) {
+    prev = first;
+    first = first->next;
+    delete prev;
+    nb++;
+    if (!first) {
+      last = nullptr; // we removed the whole list
+      mut.unlock();
+      return nb;
+    }
+  }
+  message *current = first->next;
+  prev = first;
+  while (current) {
+    if (stoi(current->msg) <= seq) {
+      prev->next = current->next;
+      if (current == last) { // we removed the last element
+        last = prev;
+      }
+      delete current;
+      nb++;
+    } else {
+      prev = current;
+    }
+    current = prev->next;
+  }
+  mut.unlock();
+  return nb;
+}
+
 message *PendingList::pop() {
   mut.lock();
   if (empty()) {

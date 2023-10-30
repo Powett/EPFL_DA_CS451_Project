@@ -19,6 +19,7 @@
 #include <cstring>
 #include <unistd.h>
 
+#include <atomic>
 #include <unordered_set>
 
 class Parser {
@@ -26,7 +27,7 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, seen() {
+        : id{id}, port{htons(port)}, lastAcked(0), seen() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -56,6 +57,7 @@ public:
       // Try to mark as seen: if already seen return false
       return seen.insert(msg).second;
     }
+    std::atomic<int> lastAcked;
 
   private:
     std::unordered_set<std::string> seen;
@@ -111,6 +113,12 @@ public:
     PerfectLinkConfig() {}
     PerfectLinkConfig(int nb_messages, int rID)
         : nb_messages(nb_messages), rID(rID) {}
+  };
+
+  struct FIFOBroadcastConfig {
+    int nb_messages;
+    FIFOBroadcastConfig() {}
+    FIFOBroadcastConfig(int nb_messages) : nb_messages(nb_messages){};
   };
 
 public:
@@ -227,6 +235,18 @@ public:
     }
     configFile >> values.nb_messages;
     configFile >> values.rID;
+    return values;
+  }
+
+  FIFOBroadcastConfig fifoBroadcastValues() {
+    std::ifstream configFile(configPath());
+    FIFOBroadcastConfig values;
+    if (!configFile.is_open()) {
+      std::ostringstream os;
+      os << "`" << configPath() << "` does not exist.";
+      throw std::invalid_argument(os.str());
+    }
+    configFile >> values.nb_messages;
     return values;
   }
 

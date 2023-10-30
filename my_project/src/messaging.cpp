@@ -106,37 +106,49 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 #endif
 
     std::string msg = std::string(buffer).substr(1);
+    int seq = stoi(msg);
     switch (buffer[0]) {
     case 'a': {
 // Ack
 #ifdef DEBUG_MODE
       ttyLog("[L] Received ack for msg: " + msg);
 #endif
-      int nb = pending.remove_instances(msg);
+      int nb = pending.remove_older(seq);
 #ifdef DEBUG_MODE
-      ttyLog("[L] Removed " + std::to_string(nb) + " instances of " + msg);
+      ttyLog("[L] Removed " + std::to_string(nb) + " with lower seq than " +
+             msg);
 #endif
       break;
     }
 
     case 'b': {
       // Normal
-      message *ackMessage = new message{fromHost, msg, size_t(recvd_len), true};
-      pending.push(ackMessage);
-#ifdef DEBUG_MODE
-      ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
-#endif
-      // If new, log into file
-      logMutex.lock();
-      if (fromHost->tryMarkSeen(msg)) {
+
+      // If expected, increase and lock
+      if (fromHost.last_seen.compare_exchange_strong(seq, seq + 1)) {
 #ifdef DEBUG_MODE
         ttyLog("[L] Was new: " + ackMessage->msg);
 #endif
-        (*logFile) << "d " << fromHost->id << " " << msg << std::endl;
+        logMutex.lock();
+        (*logFile) << "d " << fromHost->id << " " << seq << std::endl;
+        logMutex.unlock();
       }
-      logMutex.unlock();
+
+      int last_seq = fromHost.last_seen.load();
+      std::string seq_str = std::to_string(last_seq);
+
+      // If expected or older, ACK with last known
+      if (seq <= last_seq) {
+        message *ackMessage =
+            new message{fromHost, seq_str, seq_str.length() + 2, true};
+        pending.push(ackMessage);
+#ifdef DEBUG_MODE
+        ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
+#endif
+      }
       break;
     }
+
     default: {
 #ifdef DEBUG_MODE
       ttyLog("[L] Received weird message! Skipping...");
