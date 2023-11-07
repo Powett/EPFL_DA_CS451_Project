@@ -10,6 +10,8 @@
 #include <cctype>
 #include <locale>
 
+#include <memory>
+
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -157,9 +159,9 @@ public:
     return configPath_.c_str();
   }
 
-  std::vector<Host> hosts() {
+  std::vector<Host *> hosts() {
     std::ifstream hostsFile(hostsPath());
-    std::vector<Host> hosts;
+    std::vector<Host *> hosts;
 
     if (!hostsFile.is_open()) {
       std::ostringstream os;
@@ -189,7 +191,7 @@ public:
         throw std::invalid_argument(os.str());
       }
 
-      hosts.push_back(Host(id, ip, port));
+      hosts.push_back(new Host(id, ip, port));
     }
 
     if (hosts.size() < 2UL) {
@@ -198,10 +200,10 @@ public:
       throw std::invalid_argument(os.str());
     }
 
-    auto comp = [](const Host &x, const Host &y) { return x.id < y.id; };
+    auto comp = [](const Host *x, const Host *y) { return x->id < y->id; };
     auto result = std::minmax_element(hosts.begin(), hosts.end(), comp);
-    size_t minID = (*result.first).id;
-    size_t maxID = (*result.second).id;
+    size_t minID = (*result.first)->id;
+    size_t maxID = (*result.second)->id;
     if (minID != 1UL || maxID != static_cast<unsigned long>(hosts.size())) {
       std::ostringstream os;
       os << "In `" << hostsPath()
@@ -209,17 +211,18 @@ public:
       throw std::invalid_argument(os.str());
     }
 
-    std::sort(hosts.begin(), hosts.end(),
-              [](const Host &a, const Host &b) -> bool { return a.id < b.id; });
+    std::sort(
+        hosts.begin(), hosts.end(),
+        [](const Host *a, const Host *b) -> bool { return a->id < b->id; });
 
     return hosts;
   }
 
-  static Host *findHost(const sockaddr_in &addr,
-                        std::vector<Parser::Host> &hosts) {
+  static Parser::Host *findHost(const sockaddr_in &addr,
+                                std::vector<Parser::Host *> &hosts) {
     for (auto &h : hosts) {
-      if (addr.sin_addr.s_addr == h.ip && addr.sin_port == h.port) {
-        return &h;
+      if (addr.sin_addr.s_addr == h->ip && addr.sin_port == h->port) {
+        return h;
       }
     }
     return NULL;

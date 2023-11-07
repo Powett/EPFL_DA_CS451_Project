@@ -16,16 +16,19 @@
 #define LOCALHOST "127.0.0.1"
 #define DEFAULTPORT 0
 
-struct message {
-  message(Parser::Host *d, std::string m, size_t n, bool ack = false,
-          message *next = nullptr)
-      : destHost(d), msg(m), len(n), ack(ack), next(next){};
+class Message {
+public:
+  Message(Parser::Host *d, std::string m, bool ack = false, int seq = 0,
+          Message *next = nullptr)
+      : destHost(d), msg(m), ack(ack), seq(seq), next(next){};
   Parser::Host *destHost;
   std::string msg;
-  size_t len;
   bool ack;
-  message *next;
+  int seq;
+  Message *next;
+  ssize_t marshal(char *buffer);
 };
+static Message unmarshal(Parser::Host *from, char *buffer);
 
 class UDPSocket {
 public:
@@ -35,8 +38,8 @@ public:
   ssize_t unicast(sockaddr_in *, const char *, ssize_t, int = 0);
   ssize_t recv(sockaddr_in &, char *, ssize_t, int = 0);
   void listener(PendingList &, std::ofstream *, std::mutex &,
-                std::vector<Parser::Host> &, std::atomic_bool &);
-  void sender(PendingList &, const std::vector<Parser::Host> &,
+                std::vector<Parser::Host *> &, std::atomic_bool &);
+  void sender(PendingList &, const std::vector<Parser::Host *> &,
               std::atomic_bool &);
 
 private:

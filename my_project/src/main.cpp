@@ -23,6 +23,7 @@ thread listenerThreads[NLISTENERS];
 thread senderThreads[NSENDERS];
 
 PendingList pending;
+vector<Parser::Host *> hosts;
 
 atomic_bool stopThreads;
 
@@ -50,7 +51,12 @@ static void stop(int) {
     }
   }
 
-// Clean pending: automatic destructor
+  // Clean pending: automatic destructor
+
+  // clean hosts
+  for (auto &host : hosts) {
+    delete host;
+  }
 
 // Closing logFile
 #ifdef DEBUG_MODE
@@ -132,24 +138,24 @@ int main(int argc, char **argv) {
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
 #endif
-  auto hosts = parser.hosts();
+  hosts = parser.hosts();
   Parser::Host *self_host = NULL;
   Parser::Host *dest_host = NULL;
 
   for (auto &host : hosts) {
 #ifdef DEBUG_MODE
-    cout << host.id << " : ";
-    cout << host.ipReadable() << ":" << host.portReadable() << endl;
-    cout << "Machine: " << host.ip << ":" << host.port << endl;
+    cout << host->id << " : ";
+    cout << host->ipReadable() << ":" << host->portReadable() << endl;
+    cout << "Machine: " << host->ip << ":" << host->port << endl;
 #endif
-    if (host.id == parser.id()) {
-      self_host = &host;
+    if (host->id == parser.id()) {
+      self_host = host;
 #ifdef DEBUG_MODE
       cout << " [self]";
 #endif
     }
-    if (PROJECT_PART == 0 && host.id == pl_vals.rID) {
-      dest_host = &host;
+    if (PROJECT_PART == 0 && host->id == pl_vals.rID) {
+      dest_host = host;
 #ifdef DEBUG_MODE
       cout << " [dest]";
 #endif
@@ -191,8 +197,7 @@ int main(int argc, char **argv) {
   case 0: {
     if (self_host != dest_host) {
       for (int i = 1; i <= pl_vals.nb_messages; i++) {
-        message *current =
-            new message{dest_host, to_string(i), to_string(i).length() + 1};
+        Message *current = new Message(dest_host, to_string(i));
         pending.unsafe_push_last(current); // no multithreading yet
         logFile << "b " << current->msg << std::endl;
       }
@@ -202,8 +207,7 @@ int main(int argc, char **argv) {
   case 1: {
     for (int i = 1; i <= pl_vals.nb_messages; i++) {
       for (auto &host : hosts) {
-        message *current =
-            new message{&host, to_string(i), to_string(i).length() + 1};
+        Message *current = new Message(host, to_string(i), false, i);
         pending.unsafe_push_last(current); // no multithreading yet
         logFile << "b " << current->msg << std::endl;
       }

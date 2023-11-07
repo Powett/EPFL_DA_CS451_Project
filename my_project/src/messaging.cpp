@@ -82,7 +82,8 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
 }
 
 void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
-                         std::mutex &logMutex, std::vector<Parser::Host> &hosts,
+                         std::mutex &logMutex,
+                         std::vector<Parser::Host *> &hosts,
                          std::atomic_bool &flagStop) {
   while (!flagStop) {
 #ifdef DEBUG_MODE
@@ -104,57 +105,36 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) + ": " +
            buffer);
 #endif
-
-    std::string msg = std::string(buffer).substr(1);
-    int seq = stoi(msg);
-    switch (buffer[0]) {
-    case 'a': {
-// Ack
+    Message rcv = unmarshal(fromHost, buffer);
+    if (rcv.ack) { // Ack
 #ifdef DEBUG_MODE
-      ttyLog("[L] Received ack for msg: " + msg);
+      ttyLog("[L] Received ack for msg: " + rcv.msg);
 #endif
-      int nb = pending.remove_older(seq);
+      int nb = pending.remove_older(rcv.seq);
 #ifdef DEBUG_MODE
       ttyLog("[L] Removed " + std::to_string(nb) + " with lower seq than " +
-             msg);
+             std::to_string(rcv.seq));
 #endif
-      break;
-    }
-
-    case 'b': {
-      // Normal
-
+    } else { // Normal message
       // If expected, increase and lock
-      if (fromHost.last_seen.compare_exchange_strong(seq, seq + 1)) {
+      if (fromHost->lastAcked.compare_exchange_strong(rcv.seq, rcv.seq + 1)) {
 #ifdef DEBUG_MODE
-        ttyLog("[L] Was new: " + ackMessage->msg);
+        ttyLog("[L] Was new: " + rcv.msg);
 #endif
         logMutex.lock();
-        (*logFile) << "d " << fromHost->id << " " << seq << std::endl;
+        (*logFile) << "d " << fromHost->id << " " << rcv.seq << std::endl;
         logMutex.unlock();
       }
 
-      int last_seq = fromHost.last_seen.load();
-      std::string seq_str = std::to_string(last_seq);
-
+      int last_seq = fromHost->lastAcked.load();
       // If expected or older, ACK with last known
-      if (seq <= last_seq) {
-        message *ackMessage =
-            new message{fromHost, seq_str, seq_str.length() + 2, true};
+      if (rcv.seq <= last_seq) {
+        Message *ackMessage = new Message(fromHost, "", true, last_seq);
         pending.push(ackMessage);
 #ifdef DEBUG_MODE
         ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
 #endif
       }
-      break;
-    }
-
-    default: {
-#ifdef DEBUG_MODE
-      ttyLog("[L] Received weird message! Skipping...");
-#endif
-      continue;
-    }
     }
   }
 #ifdef DEBUG_MODE
@@ -163,23 +143,24 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 }
 
 void UDPSocket::sender(PendingList &pending,
-                       const std::vector<Parser::Host> &hosts,
+                       const std::vector<Parser::Host *> &hosts,
                        std::atomic_bool &flagStop) {
+  char buffer[MAX_PACKET_LENGTH];
   while (!flagStop) {
 #ifdef DEBUG_MODE
     ttyLog("[S] Ready to send");
 #endif
-    message *current = pending.pop();
+    Message *current = pending.pop();
     if (!current) {
 #ifdef DEBUG_MODE
       ttyLog("[S] Sending queue empty...");
 #endif
       continue;
     }
-    // Add correct directional byte
-    auto full_text = (current->ack ? "a" : "b") + current->msg;
-    ssize_t sent =
-        unicast(current->destHost, full_text.c_str(), current->len + 1);
+    // Marshal message
+    ssize_t len = current->marshal(buffer);
+
+    ssize_t sent = unicast(current->destHost, buffer, len);
 
     if (sent < 0) {
 #ifdef DEBUG_MODE
@@ -188,7 +169,7 @@ void UDPSocket::sender(PendingList &pending,
       continue;
     } else {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Sent: " + full_text);
+      ttyLog("[S] Sent: " + std::string(buffer));
 #endif
     }
     if (!current->ack) {
@@ -212,4 +193,41 @@ void ttyLog(std::string message) {
 #else
   std::cout << "Thread " << gettid() << ": " << message << std::endl;
 #endif
+}
+
+// Format: $A:$N:$MSG
+// return total size
+ssize_t Message::marshal(char *buffer) {
+  std::string payload;
+  payload += (ack ? "a" : "b");
+  payload += ":";
+  payload += std::to_string(seq);
+  payload += ":";
+  payload += msg;
+  ssize_t n = payload.length();
+  strncpy(buffer, payload.c_str(), n + 1);
+  buffer[n + 1] = '\0';
+#ifdef DEBUG_MODE
+  std::cout << "Marshalled msg: " << buffer << " size " << (n + 1) << std::endl;
+#endif
+  return n;
+}
+
+// Format: $A:$N:$MSG
+static Message unmarshal(Parser::Host *from, char *buffer) {
+  std::string payload = std::string(buffer);
+  bool ack = payload[0] == 'a';
+  payload = payload.substr(2);
+  auto separator = payload.find(":");
+  if (separator == std::string::npos) {
+    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
+    exit(-1);
+  }
+  int seq = std::stoi(payload.substr(0, separator));
+  std::string msg = payload.substr(separator + 1);
+#ifdef DEBUG_MODE
+  std::cout << "Unmarshalled msg: " << buffer << "{" << msg << "," << ack << ","
+            << seq << "}" << std::endl;
+#endif
+  return Message(from, msg, ack, seq);
 }

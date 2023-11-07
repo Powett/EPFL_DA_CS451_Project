@@ -1,7 +1,7 @@
 #include "pendinglist.hpp"
 #include "messaging.hpp"
 
-void PendingList::push(message *m) {
+void PendingList::push(Message *m) {
   m->next = nullptr; // sanity
   mut.lock();
   if (empty()) {
@@ -13,7 +13,7 @@ void PendingList::push(message *m) {
   }
   mut.unlock();
 }
-void PendingList::unsafe_push_last(message *m) {
+void PendingList::unsafe_push_last(Message *m) {
   m->next = nullptr; // sanity
   if (empty()) {
     first = m;
@@ -24,7 +24,7 @@ void PendingList::unsafe_push_last(message *m) {
   last = m;
 }
 
-void PendingList::push_last(message *m) {
+void PendingList::push_last(Message *m) {
   mut.lock();
   unsafe_push_last(m);
   mut.unlock();
@@ -37,7 +37,7 @@ int PendingList::remove_instances(const std::string str) {
     mut.unlock();
     return nb;
   }
-  message *prev;
+  Message *prev;
   while (first->msg == str) {
     prev = first;
     first = first->next;
@@ -49,7 +49,7 @@ int PendingList::remove_instances(const std::string str) {
       return nb;
     }
   }
-  message *current = first->next;
+  Message *current = first->next;
   prev = first;
   while (current) {
     if (current->msg == str) {
@@ -75,8 +75,8 @@ int PendingList::remove_older(const int seq) {
     mut.unlock();
     return nb;
   }
-  message *prev;
-  while (stoi(first->msg) <= seq) {
+  Message *prev;
+  while (first->seq <= seq) {
     prev = first;
     first = first->next;
     delete prev;
@@ -87,10 +87,10 @@ int PendingList::remove_older(const int seq) {
       return nb;
     }
   }
-  message *current = first->next;
+  Message *current = first->next;
   prev = first;
   while (current) {
-    if (stoi(current->msg) <= seq) {
+    if (current->seq <= seq) {
       prev->next = current->next;
       if (current == last) { // we removed the last element
         last = prev;
@@ -106,13 +106,13 @@ int PendingList::remove_older(const int seq) {
   return nb;
 }
 
-message *PendingList::pop() {
+Message *PendingList::pop() {
   mut.lock();
   if (empty()) {
     mut.unlock();
     return nullptr;
   }
-  message *prev = first;
+  Message *prev = first;
   if (first == last) { // only one element
     last = nullptr;
     first = nullptr;
@@ -127,11 +127,11 @@ bool PendingList::empty() { return first == nullptr; }
 
 std::ostream &PendingList::display(std::ostream &out) {
   mut.lock();
-  message *current = first;
+  Message *current = first;
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
-        << (current->ack ? " a" : " b") << "\"" << current->msg << "\"["
-        << std::to_string(current->len) << "]|";
+        << (current->ack ? " a" : " b") << ":" << current->seq << ":"
+        << "\"" << current->msg;
     if (current != last) {
       out << "->";
     }
@@ -142,8 +142,8 @@ std::ostream &PendingList::display(std::ostream &out) {
 }
 
 PendingList::~PendingList() {
-  message *current = first;
-  message *prev;
+  Message *current = first;
+  Message *prev;
   while (current) {
     prev = current;
     current = current->next;

@@ -2,24 +2,24 @@
 #include <mutex>
 #include <ostream>
 
-struct message;
+class Message;
 
-// Thread-safe LinkedList to store messages
+// Thread-safe LinkedList to store Messages
 class PendingList {
 public:
   PendingList() : first(nullptr), last(nullptr), mut() {}
-  void push(message *);
-  void push_last(message *);
-  void unsafe_push_last(message *);
+  void push(Message *);
+  void push_last(Message *);
+  void unsafe_push_last(Message *);
   int remove_instances(const std::string);
   int remove_older(const int);
-  message *pop();
+  Message *pop();
   std::ostream &display(std::ostream &out);
   ~PendingList();
 
 private:
-  message *first;
-  message *last;
+  Message *first;
+  Message *last;
   std::mutex mut;
   bool empty();
 };
