@@ -108,7 +108,7 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     Message rcv = unmarshal(fromHost, buffer);
     if (rcv.ack) { // Ack
 #ifdef DEBUG_MODE
-      ttyLog("[L] Received ack for msg: " + rcv.msg);
+      ttyLog("[L] Received ack for seq n: " + std::to_string(rcv.seq));
 #endif
       int nb = pending.remove_older(rcv.seq);
 #ifdef DEBUG_MODE

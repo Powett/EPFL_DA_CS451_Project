@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
   case 0: {
     if (self_host != dest_host) {
       for (int i = 1; i <= pl_vals.nb_messages; i++) {
-        Message *current = new Message(dest_host, to_string(i));
+        Message *current = new Message(dest_host, to_string(i), false, i);
         pending.unsafe_push_last(current); // no multithreading yet
         logFile << "b " << current->msg << std::endl;
       }
