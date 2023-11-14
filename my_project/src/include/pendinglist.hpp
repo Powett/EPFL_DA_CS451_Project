@@ -12,7 +12,7 @@ public:
   void push_last(Message *);
   void unsafe_push_last(Message *);
   int remove_instances(const std::string);
-  int remove_older(const int);
+  int remove_older(const int, unsigned long);
   Message *pop();
   std::ostream &display(std::ostream &out);
   ~PendingList();

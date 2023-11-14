@@ -91,45 +91,14 @@ int main(int argc, char **argv) {
 #endif
 
   // Parse config file
-  Parser::PerfectLinkConfig pl_vals = {0, 0};
   Parser::FIFOBroadcastConfig fb_vals = {0};
-
-  switch (PROJECT_PART) {
-  case 0: {
-    pl_vals = parser.perfectLinkValues();
-    break;
-  }
-  case 1: {
-    fb_vals = parser.fifoBroadcastValues();
-    break;
-  }
-  case 2: {
-    break;
-  }
-  default: {
-    break;
-  }
-  }
+  fb_vals = parser.fifoBroadcastValues();
 #ifdef DEBUG_MODE
-  switch (PROJECT_PART) {
-  case 0: {
-    cout << "Perfect Link config:" << endl;
-    cout << "==========================\n";
-    cout << pl_vals.nb_messages << " messages to be sent to " << pl_vals.rID
-         << endl;
-    break;
-  }
-  case 1: {
-    cout << "FIFO Broadcast config:" << endl;
-    cout << "==========================\n";
-    cout << pl_vals.nb_messages << " messages to be sent to " << pl_vals.rID
-         << endl;
-    break;
-  }
-  default: {
-    break;
-  }
-  }
+
+  cout << "FIFO Broadcast config:" << endl;
+  cout << "==========================\n";
+  cout << fb_vals.nb_messages << " messages to be sent " << endl;
+
   cout << endl;
 #endif
 
@@ -140,7 +109,6 @@ int main(int argc, char **argv) {
 #endif
   hosts = parser.hosts();
   Parser::Host *self_host = NULL;
-  Parser::Host *dest_host = NULL;
 
   for (auto &host : hosts) {
 #ifdef DEBUG_MODE
@@ -152,12 +120,6 @@ int main(int argc, char **argv) {
       self_host = host;
 #ifdef DEBUG_MODE
       cout << " [self]";
-#endif
-    }
-    if (PROJECT_PART == 0 && host->id == pl_vals.rID) {
-      dest_host = host;
-#ifdef DEBUG_MODE
-      cout << " [dest]";
 #endif
     }
 #ifdef DEBUG_MODE
@@ -193,33 +155,12 @@ int main(int argc, char **argv) {
   logFile.open(parser.outputPath());
 
   // Build message queue
-  switch (PROJECT_PART) {
-  case 0: {
-    if (self_host != dest_host) {
-      for (int i = 1; i <= pl_vals.nb_messages; i++) {
-        Message *current = new Message(dest_host, to_string(i), false, i);
-        pending.unsafe_push_last(current); // no multithreading yet
-        logFile << "b " << current->msg << std::endl;
-      }
+  for (int i = 1; i <= fb_vals.nb_messages; i++) {
+    for (auto &host : hosts) {
+      Message *current = new Message(host, to_string(i), false, i);
+      pending.unsafe_push_last(current); // no multithreading yet
     }
-    break;
-  }
-  case 1: {
-    for (int i = 1; i <= fb_vals.nb_messages; i++) {
-      for (auto &host : hosts) {
-        Message *current = new Message(host, to_string(i), false, i);
-        pending.unsafe_push_last(current); // no multithreading yet
-        logFile << "b " << current->msg << std::endl;
-      }
-    }
-    break;
-  }
-  case 2: {
-    break;
-  }
-  default: {
-    break;
-  }
+    logFile << "b " << to_string(i) << std::endl;
   }
 
 #ifdef DEBUG_MODE

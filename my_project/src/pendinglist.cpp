@@ -68,7 +68,7 @@ int PendingList::remove_instances(const std::string str) {
   return nb;
 }
 
-int PendingList::remove_older(const int seq) {
+int PendingList::remove_older(const int seq, unsigned long destID) {
   int nb = 0;
   mut.lock();
   if (empty()) {
@@ -76,7 +76,7 @@ int PendingList::remove_older(const int seq) {
     return nb;
   }
   Message *prev;
-  while (first->seq <= seq) {
+  while (first->seq <= seq && first->destHost->id == destID) {
     prev = first;
     first = first->next;
     delete prev;
@@ -90,7 +90,7 @@ int PendingList::remove_older(const int seq) {
   Message *current = first->next;
   prev = first;
   while (current) {
-    if (current->seq <= seq) {
+    if (current->seq <= seq && first->destHost->id == destID) {
       prev->next = current->next;
       if (current == last) { // we removed the last element
         last = prev;

@@ -87,11 +87,14 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
                          std::atomic_bool &flagStop) {
   while (!flagStop) {
 #ifdef DEBUG_MODE
-    ttyLog("[L] Waiting for message");
+    ttyLog("[L] Waiting for message, sleeping...");
+    sleep(1);
 #endif
     char buffer[MAX_PACKET_LENGTH];
     sockaddr_in from;
     ssize_t recvd_len = -1;
+
+    // Receive a message
     while (recvd_len == -1 && !flagStop) {
       recvd_len = recv(from, buffer, MAX_PACKET_LENGTH);
 #ifdef DEBUG_MODE
@@ -99,6 +102,8 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       sleep(1);
 #endif
     }
+
+    // Get source host
     auto fromHost = Parser::findHost(from, hosts);
     if (flagStop || !fromHost || recvd_len < 2) {
 #ifdef DEBUG_MODE
@@ -110,35 +115,40 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) + ": " +
            buffer);
 #endif
+
+    // Unmarshal message
     Message rcv = unmarshal(fromHost, buffer);
+
+    // Check message type
     if (rcv.ack) { // Ack
 #ifdef DEBUG_MODE
       ttyLog("[L] Received ack for seq n: " + std::to_string(rcv.seq));
 #endif
-      int nb = pending.remove_older(rcv.seq);
+      int nb = pending.remove_older(rcv.seq, fromHost->id);
 #ifdef DEBUG_MODE
-      ttyLog("[L] Removed " + std::to_string(nb) + " with lower seq than " +
+      ttyLog("[L] Removed " + std::to_string(nb) + " to " +
+             fromHost->fullAddressReadable() + " with lower seq than " +
              std::to_string(rcv.seq));
 #endif
     } else { // Normal message
-      // If expected, increase and lock
-      if (fromHost->lastAcked.compare_exchange_strong(rcv.seq, rcv.seq + 1)) {
+             // If expected, increase and lock
+      logMutex.lock();
+      if (fromHost->expected.compare_exchange_strong(rcv.seq, rcv.seq + 1)) {
 #ifdef DEBUG_MODE
         ttyLog("[L] Was new: " + rcv.msg);
 #endif
-        logMutex.lock();
         (*logFile) << "d " << fromHost->id << " " << rcv.seq << std::endl;
-        logMutex.unlock();
       }
+      logMutex.unlock();
 
-      int last_seq = fromHost->lastAcked.load();
-      // If expected or older, ACK with last known
+      // If expected or older, (re)-ACK
+      int last_seq = fromHost->expected.load() - 1;
       if (rcv.seq <= last_seq) {
-        Message *ackMessage = new Message(fromHost, rcv.msg, true, last_seq);
+        Message *ackMessage = new Message(fromHost, "", true, last_seq);
         pending.push(ackMessage);
 #ifdef DEBUG_MODE
         ttyLog("[L] Pushed ack in sending queue for msg seq: " +
-               ackMessage->seq);
+               std::to_string(ackMessage->seq));
 #endif
       }
     }
@@ -154,13 +164,16 @@ void UDPSocket::sender(PendingList &pending,
   char buffer[MAX_PACKET_LENGTH];
   while (!flagStop) {
 #ifdef DEBUG_MODE
+    ttyLog("[S] Sleeping...");
+    sleep(1);
+#endif
+#ifdef DEBUG_MODE
     ttyLog("[S] Ready to send");
 #endif
     Message *current = pending.pop();
     if (!current) {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Sending queue empty, sleeping...");
-      sleep(1);
+      ttyLog("[S] Sending queue empty...");
 #endif
       continue;
     }
@@ -233,8 +246,8 @@ static Message unmarshal(Parser::Host *from, char *buffer) {
   int seq = std::stoi(payload.substr(0, separator));
   std::string msg = payload.substr(separator + 1);
 #ifdef DEBUG_MODE
-  std::cout << "Unmarshalled msg: " << buffer << "{" << msg << "," << ack << ","
-            << seq << "}" << std::endl;
+  std::cout << "Unmarshalled msg: " << buffer << "-> {Msg:\"" << msg
+            << "\", is_ack:" << ack << ", seq:" << seq << "}" << std::endl;
 #endif
   return Message(from, msg, ack, seq);
 }

@@ -29,7 +29,7 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, lastAcked(0), seen() {
+        : id{id}, port{htons(port)}, expected(1), seen() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -59,7 +59,7 @@ public:
       // Try to mark as seen: if already seen return false
       return seen.insert(msg).second;
     }
-    std::atomic<int> lastAcked;
+    std::atomic<int> expected;
 
   private:
     std::unordered_set<std::string> seen;
@@ -107,14 +107,6 @@ public:
 
       throw std::runtime_error("No host resolves to IPv4");
     }
-  };
-
-  struct PerfectLinkConfig {
-    int nb_messages;
-    unsigned long rID;
-    PerfectLinkConfig() {}
-    PerfectLinkConfig(int nb_messages, int rID)
-        : nb_messages(nb_messages), rID(rID) {}
   };
 
   struct FIFOBroadcastConfig {
@@ -226,19 +218,6 @@ public:
       }
     }
     return NULL;
-  }
-
-  PerfectLinkConfig perfectLinkValues() {
-    std::ifstream configFile(configPath());
-    PerfectLinkConfig values;
-    if (!configFile.is_open()) {
-      std::ostringstream os;
-      os << "`" << configPath() << "` does not exist.";
-      throw std::invalid_argument(os.str());
-    }
-    configFile >> values.nb_messages;
-    configFile >> values.rID;
-    return values;
   }
 
   FIFOBroadcastConfig fifoBroadcastValues() {
