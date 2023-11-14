@@ -29,7 +29,7 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, expected(1), seen() {
+        : id{id}, port{htons(port)}, expected(1), expects(1) {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -54,16 +54,11 @@ public:
       return ipReadable() + ":" +
              std::to_string(static_cast<int>(portReadable()));
     }
-    bool tryMarkSeen(std::string msg) {
-      // Not thread-safe!
-      // Try to mark as seen: if already seen return false
-      return seen.insert(msg).second;
-    }
+
     std::atomic<int> expected;
+    std::atomic<int> expects;
 
   private:
-    std::unordered_set<std::string> seen;
-
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
       int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));

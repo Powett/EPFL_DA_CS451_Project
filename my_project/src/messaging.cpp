@@ -124,12 +124,20 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
 #ifdef DEBUG_MODE
       ttyLog("[L] Received ack for seq n: " + std::to_string(rcv.seq));
 #endif
-      int nb = pending.remove_older(rcv.seq, fromHost->id);
+      bool remoteExpected =
+          fromHost->expects.compare_exchange_strong(rcv.seq, rcv.seq + 1);
+      if (remoteExpected) {
 #ifdef DEBUG_MODE
-      ttyLog("[L] Removed " + std::to_string(nb) + " to " +
-             fromHost->fullAddressReadable() + " with lower seq than " +
-             std::to_string(rcv.seq));
+        ttyLog("[L] Was new to " + fromHost->fullAddressReadable() + ": seq " +
+               std::to_string(rcv.seq));
 #endif
+      }
+      //       int nb = pending.remove_older(rcv.seq, fromHost->id);
+      // #ifdef DEBUG_MODE
+      //       ttyLog("[L] Removed " + std::to_string(nb) + " to " +
+      //              fromHost->fullAddressReadable() + " with lower seq than "
+      //              + std::to_string(rcv.seq));
+      // #endif
     } else { // Normal message
              // If expected, increase and lock
       logMutex.lock();
@@ -177,6 +185,12 @@ void UDPSocket::sender(PendingList &pending,
 #endif
       continue;
     }
+    // If (non-ack) old message, drop
+    if (!current->ack && current->destHost->expects.load() > current->seq) {
+      delete current;
+      continue;
+    }
+
     // Marshal message
     ssize_t len = current->marshal(buffer);
 
