@@ -91,8 +91,8 @@ int main(int argc, char **argv) {
 #endif
 
   // Parse config file
-  Parser::PerfectLinkConfig pl_vals;
-  Parser::FIFOBroadcastConfig fifo_vals;
+  Parser::PerfectLinkConfig pl_vals = {0, 0};
+  Parser::FIFOBroadcastConfig fb_vals = {0};
 
   switch (PROJECT_PART) {
   case 0: {
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     break;
   }
   case 1: {
-    fifo_vals = parser.fifoBroadcastValues();
+    fb_vals = parser.fifoBroadcastValues();
     break;
   }
   case 2: {
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
     break;
   }
   case 1: {
-    for (int i = 1; i <= pl_vals.nb_messages; i++) {
+    for (int i = 1; i <= fb_vals.nb_messages; i++) {
       for (auto &host : hosts) {
         Message *current = new Message(host, to_string(i), false, i);
         pending.unsafe_push_last(current); // no multithreading yet

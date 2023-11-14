@@ -92,8 +92,13 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
     char buffer[MAX_PACKET_LENGTH];
     sockaddr_in from;
     ssize_t recvd_len = -1;
-    while (recvd_len == -1 && !flagStop)
+    while (recvd_len == -1 && !flagStop) {
       recvd_len = recv(from, buffer, MAX_PACKET_LENGTH);
+#ifdef DEBUG_MODE
+      ttyLog("[L] Sleeping...");
+      sleep(1);
+#endif
+    }
     auto fromHost = Parser::findHost(from, hosts);
     if (flagStop || !fromHost || recvd_len < 2) {
 #ifdef DEBUG_MODE
@@ -129,10 +134,11 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
       int last_seq = fromHost->lastAcked.load();
       // If expected or older, ACK with last known
       if (rcv.seq <= last_seq) {
-        Message *ackMessage = new Message(fromHost, "", true, last_seq);
+        Message *ackMessage = new Message(fromHost, rcv.msg, true, last_seq);
         pending.push(ackMessage);
 #ifdef DEBUG_MODE
-        ttyLog("[L] Pushed ack in sending queue for msg: " + ackMessage->msg);
+        ttyLog("[L] Pushed ack in sending queue for msg seq: " +
+               ackMessage->seq);
 #endif
       }
     }
@@ -153,7 +159,8 @@ void UDPSocket::sender(PendingList &pending,
     Message *current = pending.pop();
     if (!current) {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Sending queue empty...");
+      ttyLog("[S] Sending queue empty, sleeping...");
+      sleep(1);
 #endif
       continue;
     }
@@ -174,7 +181,7 @@ void UDPSocket::sender(PendingList &pending,
     }
     if (!current->ack) {
 #ifdef DEBUG_MODE
-      ttyLog("[S] Repushing message in line");
+      ttyLog("[S] Repushing message in line: " + std::to_string(current->seq));
 #endif
       pending.push_last(current);
     } else {
