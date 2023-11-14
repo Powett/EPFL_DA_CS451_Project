@@ -81,8 +81,7 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
   return ret;
 }
 
-void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
-                         std::mutex &logMutex,
+void UDPSocket::listener(PendingList &pending, std::ofstream &logFile,
                          std::vector<Parser::Host *> &hosts,
                          std::atomic_bool &flagStop) {
   while (!flagStop) {
@@ -132,25 +131,18 @@ void UDPSocket::listener(PendingList &pending, std::ofstream *logFile,
                std::to_string(rcv.seq));
 #endif
       }
-      //       int nb = pending.remove_older(rcv.seq, fromHost->id);
-      // #ifdef DEBUG_MODE
-      //       ttyLog("[L] Removed " + std::to_string(nb) + " to " +
-      //              fromHost->fullAddressReadable() + " with lower seq than "
-      //              + std::to_string(rcv.seq));
-      // #endif
     } else { // Normal message
              // If expected, increase and lock
-      logMutex.lock();
-      if (fromHost->expected.compare_exchange_strong(rcv.seq, rcv.seq + 1)) {
+      if (fromHost->expected == rcv.seq) {
+        fromHost->expected++;
 #ifdef DEBUG_MODE
         ttyLog("[L] Was new: " + rcv.msg);
 #endif
-        (*logFile) << "d " << fromHost->id << " " << rcv.seq << std::endl;
+        logFile << "d " << fromHost->id << " " << rcv.seq << std::endl;
       }
-      logMutex.unlock();
 
       // If expected or older, (re)-ACK
-      int last_seq = fromHost->expected.load() - 1;
+      int last_seq = fromHost->expected - 1;
       if (rcv.seq <= last_seq) {
         Message *ackMessage = new Message(fromHost, "", true, last_seq);
         pending.push(ackMessage);

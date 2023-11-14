@@ -1,7 +1,6 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
-#include <mutex>
 
 #include <signal.h>
 #include <thread>
@@ -11,16 +10,12 @@
 #include "parser.hpp"
 #include "pendinglist.hpp"
 
-#define NLISTENERS 4
-#define NSENDERS 3
-
 using namespace std;
 
 ofstream logFile;
-std::mutex logMutex;
 
-thread listenerThreads[NLISTENERS];
-thread senderThreads[NSENDERS];
+thread listenerThread;
+thread senderThread;
 
 PendingList pending;
 vector<Parser::Host *> hosts;
@@ -40,15 +35,12 @@ static void stop(int) {
   // kill all threads
   stopThreads = true;
 
-  for (int i = 0; i < NSENDERS; i++) {
-    if (senderThreads[i].joinable()) {
-      (senderThreads[i]).join();
-    }
+  if (senderThread.joinable()) {
+    senderThread.join();
   }
-  for (int i = 0; i < NLISTENERS; i++) {
-    if (listenerThreads[i].joinable()) {
-      (listenerThreads[i]).join();
-    }
+
+  if (listenerThread.joinable()) {
+    listenerThread.join();
   }
 
   // Clean pending: automatic destructor
@@ -168,17 +160,15 @@ int main(int argc, char **argv) {
 #endif
 
   // Start listener(s)
-  for (int i = 0; i < NLISTENERS; i++) {
-    listenerThreads[i] =
-        thread(&UDPSocket::listener, &sock, std::ref(pending), &logFile,
-               std::ref(logMutex), std::ref(hosts), std::ref(stopThreads));
-  }
+
+  listenerThread =
+      thread(&UDPSocket::listener, &sock, std::ref(pending), std::ref(logFile),
+             std::ref(hosts), std::ref(stopThreads));
 
   // Start sender(s)
-  for (int i = 0; i < NSENDERS; i++) {
-    senderThreads[i] = thread(&UDPSocket::sender, &sock, std::ref(pending),
-                              std::ref(hosts), std::ref(stopThreads));
-  }
+
+  senderThread = thread(&UDPSocket::sender, &sock, std::ref(pending),
+                        std::ref(hosts), std::ref(stopThreads));
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";

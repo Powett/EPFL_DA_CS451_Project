@@ -37,8 +37,8 @@ public:
   ssize_t unicast(const Parser::Host *, const char *, ssize_t, int = 0);
   ssize_t unicast(sockaddr_in *, const char *, ssize_t, int = 0);
   ssize_t recv(sockaddr_in &, char *, ssize_t, int = 0);
-  void listener(PendingList &, std::ofstream *, std::mutex &,
-                std::vector<Parser::Host *> &, std::atomic_bool &);
+  void listener(PendingList &, std::ofstream &, std::vector<Parser::Host *> &,
+                std::atomic_bool &);
   void sender(PendingList &, const std::vector<Parser::Host *> &,
               std::atomic_bool &);
 

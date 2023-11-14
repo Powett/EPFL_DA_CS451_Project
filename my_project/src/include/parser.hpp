@@ -55,7 +55,7 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    std::atomic<int> expected;
+    int expected;
     std::atomic<int> expects;
 
   private:
