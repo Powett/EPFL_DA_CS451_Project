@@ -8,20 +8,17 @@
 
 #include "defines.hpp"
 #include "messaging.hpp"
+#include "node.hpp"
 #include "parser.hpp"
 #include "pendinglist.hpp"
 
 using namespace std;
 
-ofstream logFile;
-
 thread listenerThread;
 thread senderThread;
+thread fdThread;
 
-PendingList pending;
-vector<Parser::Host *> hosts;
-
-atomic_bool stopThreads;
+Node sys;
 
 static void stop(int) {
   // set default handlers
@@ -34,7 +31,7 @@ static void stop(int) {
 #endif
 
   // kill all threads
-  stopThreads = true;
+  sys.stopThreads = true;
 
   if (senderThread.joinable()) {
     senderThread.join();
@@ -44,10 +41,14 @@ static void stop(int) {
     listenerThread.join();
   }
 
+  if (fdThread.joinable()) {
+    fdThread.join();
+  }
+
   // Clean pending: automatic destructor
 
   // clean hosts
-  for (auto &host : hosts) {
+  for (auto &host : sys.hosts) {
     delete host;
   }
 
@@ -55,7 +56,7 @@ static void stop(int) {
 #ifdef DEBUG_MODE
   cout << "Closing logfile.\n";
 #endif
-  logFile.close();
+  sys.logFile.close();
 
   // exit directly from signal handler
   exit(0);
@@ -100,10 +101,11 @@ int main(int argc, char **argv) {
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
 #endif
-  hosts = parser.hosts();
+  sys.hosts = parser.hosts();
+  sys.id = parser.id();
   Parser::Host *self_host = NULL;
 
-  for (auto &host : hosts) {
+  for (auto &host : sys.hosts) {
 #ifdef DEBUG_MODE
     cout << host->id << " : ";
     cout << host->ipReadable() << ":" << host->portReadable() << endl;
@@ -136,22 +138,21 @@ int main(int argc, char **argv) {
   cout << "===============\n";
 #endif
 
-  stopThreads = false;
 // Create UDP socket
 #ifdef DEBUG_MODE
   cout << "Creating socket on " << self_host->ipReadable() << ":"
        << self_host->portReadable() << endl;
 #endif
-  UDPSocket sock = UDPSocket(self_host->ip, self_host->port);
+  sys.sock = UDPSocket(self_host->ip, self_host->port);
 
   // Open logfile
-  logFile.open(parser.outputPath());
+  sys.logFile.open(parser.outputPath());
 
   // Build message queue
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    sock.unsafe_bebBroadcast(pending, hosts, to_string(i), i, parser.id());
+    sys.unsafe_bebBroadcast(to_string(i), i, parser.id());
     self_host->testSetForwarded(i);
-    logFile << "b " << to_string(i) << std::endl;
+    sys.logFile << "b " << to_string(i) << std::endl;
   }
 
 #ifdef DEBUG_MODE
@@ -160,16 +161,15 @@ int main(int argc, char **argv) {
 
   // Start listener(s)
 
-  listenerThread = thread(&UDPSocket::bebListener, &sock, std::ref(pending),
-                          std::ref(logFile), std::ref(hosts), parser.id(),
-                          std::ref(stopThreads));
+  listenerThread = thread(&Node::bebListener, &sys);
 
   // Start sender(s)
 
-  senderThread = thread(&UDPSocket::bebSender, &sock, std::ref(pending),
-                        std::ref(stopThreads));
+  senderThread = thread(&Node::bebSender, &sys);
 
   // Start failure detector
+
+  fdThread = thread(&Node::failureDetector, &sys);
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";

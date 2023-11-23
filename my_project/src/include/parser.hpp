@@ -32,7 +32,8 @@ public:
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
         : id{id}, port{htons(port)}, last_ping(0),
-          acknowledgers(std::map < int, std::unordered_set<size_t>()) {
+          acknowledgers(std::map<int, std::unordered_set<size_t>>()),
+          forwarded(), lastDelivered(0), crashed(false) {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -58,6 +59,7 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
+    std::time_t last_ping;
     // maps a message seqN to nodesID having acknowledged it
     std::map<int, std::unordered_set<size_t>> acknowledgers;
 
@@ -66,8 +68,7 @@ public:
     std::vector<bool> forwarded;
 
     size_t lastDelivered;
-    std::atomic<bool> crashed;
-    std::time_t last_ping;
+    std::atomic_bool crashed;
 
     bool addAcknowledger(size_t seq, size_t ID) {
       if (acknowledgers.find(seq) == acknowledgers.end()) {
