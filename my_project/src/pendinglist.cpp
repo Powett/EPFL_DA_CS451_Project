@@ -30,82 +30,6 @@ void PendingList::push_last(Message *m) {
   mut.unlock();
 }
 
-int PendingList::remove_instances(const std::string str) {
-  int nb = 0;
-  mut.lock();
-  if (empty()) {
-    mut.unlock();
-    return nb;
-  }
-  Message *prev;
-  while (first->msg == str) {
-    prev = first;
-    first = first->next;
-    delete prev;
-    nb++;
-    if (!first) {
-      last = nullptr; // we removed the whole list
-      mut.unlock();
-      return nb;
-    }
-  }
-  Message *current = first->next;
-  prev = first;
-  while (current) {
-    if (current->msg == str) {
-      prev->next = current->next;
-      if (current == last) { // we removed the last element
-        last = prev;
-      }
-      delete current;
-      nb++;
-    } else {
-      prev = current;
-    }
-    current = prev->next;
-  }
-  mut.unlock();
-  return nb;
-}
-
-int PendingList::remove_older(const size_t seq, unsigned long destID) {
-  int nb = 0;
-  mut.lock();
-  if (empty()) {
-    mut.unlock();
-    return nb;
-  }
-  Message *prev;
-  while (first->seq <= seq && first->destHost->id == destID) {
-    prev = first;
-    first = first->next;
-    delete prev;
-    nb++;
-    if (!first) {
-      last = nullptr; // we removed the whole list
-      mut.unlock();
-      return nb;
-    }
-  }
-  Message *current = first->next;
-  prev = first;
-  while (current) {
-    if (current->seq <= seq && first->destHost->id == destID) {
-      prev->next = current->next;
-      if (current == last) { // we removed the last element
-        last = prev;
-      }
-      delete current;
-      nb++;
-    } else {
-      prev = current;
-    }
-    current = prev->next;
-  }
-  mut.unlock();
-  return nb;
-}
-
 Message *PendingList::pop() {
   mut.lock();
   if (empty()) {
@@ -131,7 +55,7 @@ std::ostream &PendingList::display(std::ostream &out) {
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
         << (current->ack ? " a" : " b") << ":" << current->seq << ":"
-        << "\"" << current->msg;
+        << "\"" << current->msg << "\"";
     if (current != last) {
       out << "->";
     }

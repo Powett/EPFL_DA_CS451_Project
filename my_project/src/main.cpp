@@ -18,7 +18,7 @@ thread listenerThread;
 thread senderThread;
 thread fdThread;
 
-Node sys;
+Node node;
 
 static void stop(int) {
   // set default handlers
@@ -31,7 +31,7 @@ static void stop(int) {
 #endif
 
   // kill all threads
-  sys.stopThreads = true;
+  node.stopThreads = true;
 
   if (senderThread.joinable()) {
     senderThread.join();
@@ -48,7 +48,7 @@ static void stop(int) {
   // Clean pending: automatic destructor
 
   // clean hosts
-  for (auto &host : sys.hosts) {
+  for (auto &host : node.hosts) {
     delete host;
   }
 
@@ -56,7 +56,7 @@ static void stop(int) {
 #ifdef DEBUG_MODE
   cout << "Closing logfile.\n";
 #endif
-  sys.logFile.close();
+  node.logFile.close();
 
   // exit directly from signal handler
   exit(0);
@@ -101,11 +101,11 @@ int main(int argc, char **argv) {
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
 #endif
-  sys.hosts = parser.hosts();
-  sys.id = parser.id();
+  node.hosts = parser.hosts();
+  node.id = parser.id();
   Parser::Host *self_host = NULL;
 
-  for (auto &host : sys.hosts) {
+  for (auto &host : node.hosts) {
 #ifdef DEBUG_MODE
     cout << host->id << " : ";
     cout << host->ipReadable() << ":" << host->portReadable() << endl;
@@ -143,33 +143,33 @@ int main(int argc, char **argv) {
   cout << "Creating socket on " << self_host->ipReadable() << ":"
        << self_host->portReadable() << endl;
 #endif
-  sys.sock = UDPSocket(self_host->ip, self_host->port);
-
+  UDPSocket sock = UDPSocket(self_host->ip, self_host->port);
+  node.sock = &sock;
   // Open logfile
-  sys.logFile.open(parser.outputPath());
+  node.logFile.open(parser.outputPath());
 
   // Build message queue
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    sys.unsafe_bebBroadcast(to_string(i), i, parser.id());
+    node.unsafe_bebBroadcast(to_string(i), i, parser.id());
     self_host->testSetForwarded(i);
-    sys.logFile << "b " << to_string(i) << std::endl;
+    node.logFile << "b " << to_string(i) << std::endl;
   }
 
 #ifdef DEBUG_MODE
-  cout << "Message list:\n" << pending << endl;
+  cout << "Message list:\n" << node.pending << endl;
 #endif
 
   // Start listener(s)
 
-  listenerThread = thread(&Node::bebListener, &sys);
+  listenerThread = thread(&Node::bebListener, &node);
 
   // Start sender(s)
 
-  senderThread = thread(&Node::bebSender, &sys);
+  senderThread = thread(&Node::bebSender, &node);
 
   // Start failure detector
 
-  fdThread = thread(&Node::failureDetector, &sys);
+  fdThread = thread(&Node::failureDetector, &node);
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";

@@ -1,5 +1,5 @@
 #include "node.hpp"
-#include "messaging.hpp"
+#include "defines.hpp"
 
 void Node::bebListener() {
   while (!stopThreads) {
@@ -13,7 +13,7 @@ void Node::bebListener() {
 
     // Receive a message
     while (recvd_len == -1 && !stopThreads) {
-      recvd_len = sock.recv(from, buffer, MAX_PACKET_LENGTH);
+      recvd_len = sock->recv(from, buffer, MAX_PACKET_LENGTH);
 #ifdef DEBUG_MODE
       ttyLog("[L] Sleeping...");
       sleep(1);
@@ -35,10 +35,10 @@ void Node::bebListener() {
 
 #ifdef DEBUG_MODE
     ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) +
-           ", relayed by: " + std::to_string(relayHost->id) ", content: " +
-           buffer);
+           ", relayed by: " + std::to_string(relayHost->id) +
+           ", content: " + buffer);
 #endif
-    relayHost->last_ping = std::time(nullptr);
+    relayHost->lastPing = std::time(nullptr);
     bebDeliver(rcv, relayHost, fromHost);
   }
 #ifdef DEBUG_MODE
@@ -63,11 +63,18 @@ void Node::bebSender() {
 #endif
       continue;
     }
+    if (current->destHost->crashed) {
+#ifdef DEBUG_MODE
+      ttyLog("[S] Skipping send to crashed node");
+#endif
+      delete current;
+      continue;
+    }
 
     // Marshal message
     ssize_t len = current->marshal(buffer);
     // Send message
-    ssize_t sent = sock.unicast(current->destHost, buffer, len);
+    ssize_t sent = sock->unicast(current->destHost, buffer, len);
 
     if (sent < 0) {
 #ifdef DEBUG_MODE
@@ -97,7 +104,10 @@ void Node::bebSender() {
 void Node::bebDeliver(Message &m, Parser::Host *relayH, Parser::Host *fromH) {
   // add fromHost to acknowledgers for message m (id:seq)
   fromH->addAcknowledger(m.seq, relayH->id);
-
+#ifdef DEBUG_MODE
+  ttyLog("[L] bebDelivered message " + std::to_string(m.seq) + " from: " +
+         std::to_string(fromH->id) + " through: " + std::to_string(relayH->id));
+#endif
   // Check for deliverable messages
   for (auto &d_host : hosts) {
     bool all_ack = true;
@@ -106,18 +116,23 @@ void Node::bebDeliver(Message &m, Parser::Host *relayH, Parser::Host *fromH) {
         continue;
       }
       if (!d_host->hasAcknowledger(d_host->lastDelivered + 1, host->id)) {
+#ifdef DEBUG_MODE
+        ttyLog("[L] Cannot deliver, " + std::to_string(host->id) +
+               " has not acknowledged msg from " + std::to_string(d_host->id) +
+               " n°" + std::to_string(d_host->lastDelivered + 1));
+#endif
         all_ack = false;
         break;
       }
     }
     if (all_ack) {
+      d_host->lastDelivered++;
       logFile << "d " << d_host->id << " " << d_host->lastDelivered
               << std::endl;
 #ifdef DEBUG_MODE
       ttyLog("[L] Delivered message " + std::to_string(d_host->lastDelivered) +
              " from: " + std::to_string(d_host->id));
 #endif
-      d_host->lastDelivered++;
     }
   }
 
@@ -141,69 +156,19 @@ void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
 }
 
 void Node::failureDetector() {
+  sleep(5); // do not start suspecting too soon
   time_t t;
   while (!stopThreads) {
     std::time(&t);
     for (auto &host : hosts) {
-      if ((t - host->last_ping) > 2) {
+      // do not suspect self!
+      if (host->id != id && !host->crashed && difftime(t, host->lastPing) > 2) {
         host->crashed = true;
+#ifdef DEBUG_MODE
+        ttyLog("[P] Suspecting " + std::to_string(host->id));
+#endif
       }
     }
     usleep(500);
   }
-}
-
-void ttyLog(std::string message) {
-#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
-  std::cout << "Thread "
-            << ": " << message << std::endl;
-#else
-  std::cout << "Thread " << gettid() << ": " << message << std::endl;
-#endif
-}
-
-// Format: $Ack:$Nseq:$IDfrom:$MSG
-// return total size
-ssize_t Message::marshal(char *buffer) {
-  std::string payload;
-  payload += (ack ? "a" : "b");
-  payload += ":";
-  payload += std::to_string(seq);
-  payload += ":";
-  payload += std::to_string(fromID);
-  payload += ":";
-  payload += msg;
-  ssize_t n = payload.length();
-  strncpy(buffer, payload.c_str(), n + 1);
-  buffer[n + 1] = '\0';
-#ifdef DEBUG_MODE
-  std::cout << "Marshalled msg: " << buffer << " size " << (n + 1) << std::endl;
-#endif
-  return n;
-}
-
-// Format: $A:$N:$MSG
-static Message unmarshal(Parser::Host *from, char *buffer) {
-  std::string payload = std::string(buffer);
-  bool ack = payload[0] == 'a';
-  payload = payload.substr(2);
-  auto separator = payload.find(":");
-  if (separator == std::string::npos) {
-    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
-    return Message();
-  }
-  size_t seq = std::stoi(payload.substr(0, separator));
-  payload = payload.substr(separator + 1);
-  separator = payload.find(":");
-  if (separator == std::string::npos) {
-    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
-    return Message();
-  }
-  int fromID = std::stoi(payload.substr(0, separator));
-  std::string msg = payload.substr(separator + 1);
-#ifdef DEBUG_MODE
-  std::cout << "Unmarshalled msg: " << buffer << "-> {Msg:\"" << msg
-            << "\", is_ack:" << ack << ", seq:" << seq << "}" << std::endl;
-#endif
-  return Message(from, msg, ack, seq, fromID);
 }

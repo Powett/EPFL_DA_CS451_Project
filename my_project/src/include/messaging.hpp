@@ -24,3 +24,21 @@ public:
 private:
   int sockfd;
 };
+
+class Message {
+public:
+  Message() = default;
+  Message(Parser::Host *d, std::string m, size_t fromID, bool ack = false,
+          size_t seq = 0, Message *next = nullptr)
+      : destHost(d), msg(m), ack(ack), seq(seq), fromID(fromID), next(next){};
+  Parser::Host *destHost;
+  std::string msg;
+  bool ack;
+  size_t seq;
+  size_t fromID;
+  Message *next;
+  ssize_t marshal(char *buffer);
+};
+
+Message unmarshal(Parser::Host *from, char *buffer);
+void ttyLog(std::string message);

@@ -31,8 +31,8 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, last_ping(0),
-          acknowledgers(std::map<int, std::unordered_set<size_t>>()),
+        : id{id}, port{htons(port)}, lastPing(std::time(nullptr)),
+          acknowledgers(std::map<size_t, std::unordered_set<size_t>>()),
           forwarded(), lastDelivered(0), crashed(false) {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
@@ -59,9 +59,9 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    std::time_t last_ping;
+    std::time_t lastPing;
     // maps a message seqN to nodesID having acknowledged it
-    std::map<int, std::unordered_set<size_t>> acknowledgers;
+    std::map<size_t, std::unordered_set<size_t>> acknowledgers;
 
     // one-thread only
     // maps a message sent by this host to its "was forwarded" value
@@ -72,9 +72,14 @@ public:
 
     bool addAcknowledger(size_t seq, size_t ID) {
       if (acknowledgers.find(seq) == acknowledgers.end()) {
+        acknowledgers[seq] = std::unordered_set<size_t>();
       } else {
-        acknowledgers[seq] = std::unordered_set<size_t>(ID);
+        if (acknowledgers[seq].find(ID) != acknowledgers[seq].end()) {
+          return false;
+        }
       }
+      acknowledgers[seq].insert(ID);
+      return true;
     }
 
     bool hasAcknowledger(size_t seq, size_t ID) {
