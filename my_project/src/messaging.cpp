@@ -81,9 +81,9 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
   return ret;
 }
 
-void UDPSocket::listener(PendingList &pending, std::ofstream &logFile,
-                         std::vector<Parser::Host *> &hosts,
-                         std::atomic_bool &flagStop) {
+void UDPSocket::bebListener(PendingList &pending, std::ofstream &logFile,
+                            std::vector<Parser::Host *> &hosts, size_t self_ID,
+                            std::atomic_bool &flagStop) {
   while (!flagStop) {
 #ifdef DEBUG_MODE
     ttyLog("[L] Waiting for message, sleeping...");
@@ -103,64 +103,32 @@ void UDPSocket::listener(PendingList &pending, std::ofstream &logFile,
     }
 
     // Get source host
-    auto fromHost = Parser::findHost(from, hosts);
-    if (flagStop || !fromHost || recvd_len < 2) {
+    auto relayHost = Parser::findHost(from, hosts);
+    if (flagStop || !relayHost || recvd_len < 2) {
 #ifdef DEBUG_MODE
       ttyLog("[L] Error while receiving");
 #endif
       continue;
     }
-#ifdef DEBUG_MODE
-    ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) + ": " +
-           buffer);
-#endif
 
     // Unmarshal message
-    Message rcv = unmarshal(fromHost, buffer);
+    Message rcv = unmarshal(relayHost, buffer);
+    auto fromHost = Parser::findHostByID(rcv.fromID, hosts);
 
-    // Check message type
-    if (rcv.ack) { // Ack
 #ifdef DEBUG_MODE
-      ttyLog("[L] Received ack for seq n: " + std::to_string(rcv.seq));
+    ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) +
+           ", relayed by: " + std::to_string(relayHost->id) ", content: " +
+           buffer);
 #endif
-      bool remoteExpected =
-          fromHost->expects.compare_exchange_strong(rcv.seq, rcv.seq + 1);
-      if (remoteExpected) {
-#ifdef DEBUG_MODE
-        ttyLog("[L] Was new to " + fromHost->fullAddressReadable() + ": seq " +
-               std::to_string(rcv.seq));
-#endif
-      }
-    } else { // Normal message
-             // If expected, increase and lock
-      if (fromHost->expected == rcv.seq) {
-        fromHost->expected++;
-#ifdef DEBUG_MODE
-        ttyLog("[L] Was new: " + rcv.msg);
-#endif
-        logFile << "d " << fromHost->id << " " << rcv.seq << std::endl;
-      }
-
-      // If expected or older, (re)-ACK
-      int last_seq = fromHost->expected - 1;
-      if (rcv.seq <= last_seq) {
-        Message *ackMessage = new Message(fromHost, "", true, last_seq);
-        pending.push(ackMessage);
-#ifdef DEBUG_MODE
-        ttyLog("[L] Pushed ack in sending queue for msg seq: " +
-               std::to_string(ackMessage->seq));
-#endif
-      }
-    }
+    relayHost->last_ping = std::time(nullptr);
+    bebDeliver(pending, hosts, rcv, relayHost, fromHost, logFile);
   }
 #ifdef DEBUG_MODE
   ttyLog("[L] Listener exit");
 #endif
 }
 
-void UDPSocket::sender(PendingList &pending,
-                       const std::vector<Parser::Host *> &hosts,
-                       std::atomic_bool &flagStop) {
+void UDPSocket::bebSender(PendingList &pending, std::atomic_bool &flagStop) {
   char buffer[MAX_PACKET_LENGTH];
   while (!flagStop) {
 #ifdef DEBUG_MODE
@@ -177,15 +145,10 @@ void UDPSocket::sender(PendingList &pending,
 #endif
       continue;
     }
-    // If (non-ack) old message, drop
-    if (!current->ack && current->destHost->expects.load() > current->seq) {
-      delete current;
-      continue;
-    }
 
     // Marshal message
     ssize_t len = current->marshal(buffer);
-
+    // Send message
     ssize_t sent = unicast(current->destHost, buffer, len);
 
     if (sent < 0) {
@@ -198,18 +161,71 @@ void UDPSocket::sender(PendingList &pending,
       ttyLog("[S] Sent: " + std::string(buffer));
 #endif
     }
-    if (!current->ack) {
+    if (current->ack) {
+      // do not resend
+      delete current;
+    } else {
 #ifdef DEBUG_MODE
       ttyLog("[S] Repushing message in line: " + std::to_string(current->seq));
 #endif
       pending.push_last(current);
-    } else {
-      delete current;
     }
   }
 #ifdef DEBUG_MODE
   ttyLog("[S] Sender exit");
 #endif
+}
+
+void UDPSocket::bebDeliver(PendingList &pending,
+                           std::vector<Parser::Host *> &hosts, Message &m,
+                           Parser::Host *relayH, Parser::Host *fromH,
+                           std::ofstream &logFile) {
+  // add fromHost to acknowledgers for message m (id:seq)
+  fromH->addAcknowledger(m.seq, relayH->id);
+
+  // Check for deliverable messages
+  for (auto &d_host : hosts) {
+    bool all_ack = true;
+    for (auto &host : hosts) {
+      if (host->crashed) {
+        continue;
+      }
+      if (!d_host->hasAcknowledger(d_host->lastDelivered + 1, host->id)) {
+        all_ack = false;
+        break;
+      }
+    }
+    if (all_ack) {
+      logFile << "d " << d_host->id << " " << d_host->lastDelivered
+              << std::endl;
+#ifdef DEBUG_MODE
+      ttyLog("[L] Delivered message " + std::to_string(d_host->lastDelivered) +
+             " from: " + std::to_string(d_host->id));
+#endif
+      d_host->lastDelivered++;
+    }
+  }
+
+  // if (relay, m) are not in forwarded, add and forward
+  if (fromH->testSetForwarded(m.seq)) {
+    bebBroadcast(pending, hosts, m.msg, m.seq, fromH->id);
+  }
+}
+
+void unsafe_bebBroadcast(PendingList &pending,
+                         std::vector<Parser::Host *> &hosts, std::string m,
+                         size_t seq, size_t fromID) {
+  for (auto &host : hosts) {
+    Message *current = new Message(host, m, fromID, false, seq);
+    pending.unsafe_push_last(current); // no multithreading yet
+  }
+}
+void safe_bebBroadcast(PendingList &pending, std::vector<Parser::Host *> &hosts,
+                       std::string m, size_t seq, size_t fromID) {
+  for (auto &host : hosts) {
+    Message *current = new Message(host, m, fromID, false, seq);
+    pending.push_last(current); // could be optimized
+  }
 }
 
 void ttyLog(std::string message) {
@@ -221,13 +237,15 @@ void ttyLog(std::string message) {
 #endif
 }
 
-// Format: $A:$N:$MSG
+// Format: $Ack:$Nseq:$IDfrom:$MSG
 // return total size
 ssize_t Message::marshal(char *buffer) {
   std::string payload;
   payload += (ack ? "a" : "b");
   payload += ":";
   payload += std::to_string(seq);
+  payload += ":";
+  payload += std::to_string(fromID);
   payload += ":";
   payload += msg;
   ssize_t n = payload.length();
@@ -247,13 +265,20 @@ static Message unmarshal(Parser::Host *from, char *buffer) {
   auto separator = payload.find(":");
   if (separator == std::string::npos) {
     std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
-    exit(-1);
+    return Message();
   }
-  int seq = std::stoi(payload.substr(0, separator));
+  size_t seq = std::stoi(payload.substr(0, separator));
+  payload = payload.substr(separator + 1);
+  separator = payload.find(":");
+  if (separator == std::string::npos) {
+    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
+    return Message();
+  }
+  int fromID = std::stoi(payload.substr(0, separator));
   std::string msg = payload.substr(separator + 1);
 #ifdef DEBUG_MODE
   std::cout << "Unmarshalled msg: " << buffer << "-> {Msg:\"" << msg
             << "\", is_ack:" << ack << ", seq:" << seq << "}" << std::endl;
 #endif
-  return Message(from, msg, ack, seq);
+  return Message(from, msg, ack, seq, fromID);
 }

@@ -18,13 +18,15 @@
 
 class Message {
 public:
-  Message(Parser::Host *d, std::string m, bool ack = false, int seq = 0,
-          Message *next = nullptr)
-      : destHost(d), msg(m), ack(ack), seq(seq), next(next){};
+  Message() = default;
+  Message(Parser::Host *d, std::string m, size_t fromID, bool ack = false,
+          size_t seq = 0, Message *next = nullptr)
+      : destHost(d), msg(m), ack(ack), seq(seq), fromID(fromID), next(next){};
   Parser::Host *destHost;
   std::string msg;
   bool ack;
-  int seq;
+  size_t seq;
+  size_t fromID;
   Message *next;
   ssize_t marshal(char *buffer);
 };
@@ -37,10 +39,15 @@ public:
   ssize_t unicast(const Parser::Host *, const char *, ssize_t, int = 0);
   ssize_t unicast(sockaddr_in *, const char *, ssize_t, int = 0);
   ssize_t recv(sockaddr_in &, char *, ssize_t, int = 0);
-  void listener(PendingList &, std::ofstream &, std::vector<Parser::Host *> &,
-                std::atomic_bool &);
-  void sender(PendingList &, const std::vector<Parser::Host *> &,
-              std::atomic_bool &);
+  void bebListener(PendingList &, std::ofstream &,
+                   std::vector<Parser::Host *> &, size_t, std::atomic_bool &);
+  void bebSender(PendingList &, std::atomic_bool &);
+  void bebDeliver(PendingList &, std::vector<Parser::Host *> &, Message &,
+                  Parser::Host *, Parser::Host *, std::ofstream &);
+  void bebBroadcast(PendingList &, std::vector<Parser::Host *> &, std::string,
+                    size_t, size_t);
+  void unsafe_bebBroadcast(PendingList &, std::vector<Parser::Host *> &,
+                           std::string, size_t, size_t);
 
 private:
   int sockfd;

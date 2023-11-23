@@ -68,7 +68,7 @@ int PendingList::remove_instances(const std::string str) {
   return nb;
 }
 
-int PendingList::remove_older(const int seq, unsigned long destID) {
+int PendingList::remove_older(const size_t seq, unsigned long destID) {
   int nb = 0;
   mut.lock();
   if (empty()) {

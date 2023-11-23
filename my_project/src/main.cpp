@@ -4,6 +4,7 @@
 
 #include <signal.h>
 #include <thread>
+#include <unordered_set>
 
 #include "defines.hpp"
 #include "messaging.hpp"
@@ -148,10 +149,8 @@ int main(int argc, char **argv) {
 
   // Build message queue
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    for (auto &host : hosts) {
-      Message *current = new Message(host, to_string(i), false, i);
-      pending.unsafe_push_last(current); // no multithreading yet
-    }
+    sock.unsafe_bebBroadcast(pending, hosts, to_string(i), i, parser.id());
+    self_host->testSetForwarded(i);
     logFile << "b " << to_string(i) << std::endl;
   }
 
@@ -161,14 +160,16 @@ int main(int argc, char **argv) {
 
   // Start listener(s)
 
-  listenerThread =
-      thread(&UDPSocket::listener, &sock, std::ref(pending), std::ref(logFile),
-             std::ref(hosts), std::ref(stopThreads));
+  listenerThread = thread(&UDPSocket::bebListener, &sock, std::ref(pending),
+                          std::ref(logFile), std::ref(hosts), parser.id(),
+                          std::ref(stopThreads));
 
   // Start sender(s)
 
-  senderThread = thread(&UDPSocket::sender, &sock, std::ref(pending),
-                        std::ref(hosts), std::ref(stopThreads));
+  senderThread = thread(&UDPSocket::bebSender, &sock, std::ref(pending),
+                        std::ref(stopThreads));
+
+  // Start failure detector
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";

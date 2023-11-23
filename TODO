@@ -1,1 +1,8 @@
+- uniform reliable:
+  - failure detector
+  - resend
+    - store old
+    - put in sendqueue
+
+
 - p3 ?

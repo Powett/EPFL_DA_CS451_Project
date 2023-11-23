@@ -22,6 +22,8 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <ctime>
+#include <map>
 #include <unordered_set>
 
 class Parser {
@@ -29,7 +31,8 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, expected(1), expects(1) {
+        : id{id}, port{htons(port)}, last_ping(0),
+          acknowledgers(std::map < int, std::unordered_set<size_t>()) {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -46,7 +49,7 @@ public:
 
     unsigned short portReadable() const { return ntohs(port); }
 
-    unsigned long id;
+    size_t id;
     in_addr_t ip;
     unsigned short port;
 
@@ -55,8 +58,45 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    int expected;
-    std::atomic<int> expects;
+    // maps a message seqN to nodesID having acknowledged it
+    std::map<int, std::unordered_set<size_t>> acknowledgers;
+
+    // one-thread only
+    // maps a message sent by this host to its "was forwarded" value
+    std::vector<bool> forwarded;
+
+    size_t lastDelivered;
+    std::atomic<bool> crashed;
+    std::time_t last_ping;
+
+    bool addAcknowledger(size_t seq, size_t ID) {
+      if (acknowledgers.find(seq) == acknowledgers.end()) {
+      } else {
+        acknowledgers[seq] = std::unordered_set<size_t>(ID);
+      }
+    }
+
+    bool hasAcknowledger(size_t seq, size_t ID) {
+      if (acknowledgers.find(seq) == acknowledgers.end()) {
+        return false;
+      }
+      if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
+        return false;
+      }
+      return true;
+    }
+
+    // Return true if the value was changed
+    bool testSetForwarded(size_t seq) {
+      while (forwarded.size() < seq) {
+        forwarded.push_back(false);
+      }
+      if (forwarded[seq]) {
+        return false;
+      }
+      forwarded[seq] = true;
+      return true;
+    }
 
   private:
     bool isValidIpAddress(const char *ipAddress) {
@@ -122,7 +162,7 @@ public:
     parsed = true;
   }
 
-  unsigned long id() const {
+  size_t id() const {
     checkParsed();
     return id_;
   }
@@ -168,7 +208,7 @@ public:
         continue;
       }
 
-      unsigned long id;
+      size_t id;
       std::string ip;
       unsigned short port;
 
@@ -209,6 +249,16 @@ public:
                                 std::vector<Parser::Host *> &hosts) {
     for (auto &h : hosts) {
       if (addr.sin_addr.s_addr == h->ip && addr.sin_port == h->port) {
+        return h;
+      }
+    }
+    return NULL;
+  }
+
+  static Parser::Host *findHostByID(size_t ID,
+                                    std::vector<Parser::Host *> &hosts) {
+    for (auto &h : hosts) {
+      if (h->id == ID) {
         return h;
       }
     }
@@ -359,7 +409,7 @@ private:
 
   bool parsed;
 
-  unsigned long id_;
+  size_t id_;
   std::string hostsPath_;
   std::string outputPath_;
   std::string configPath_;
