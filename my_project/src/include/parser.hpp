@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <mutex>
 #include <ctime>
 #include <map>
 #include <unordered_set>
@@ -33,7 +34,7 @@ public:
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
         : id{id}, port{htons(port)}, lastPing(std::time(nullptr)),
           acknowledgers(std::map<size_t, std::unordered_set<size_t>>()),
-          forwarded(), lastDelivered(0), crashed(false) {
+          forwarded(), lastDelivered(0), crashed(false), ackers_mutex() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -71,25 +72,33 @@ public:
     std::atomic_bool crashed;
 
     bool addAcknowledger(size_t seq, size_t ID) {
+      ackers_mutex.lock();
       if (acknowledgers.find(seq) == acknowledgers.end()) {
         acknowledgers[seq] = std::unordered_set<size_t>();
       } else {
         if (acknowledgers[seq].find(ID) != acknowledgers[seq].end()) {
+          ackers_mutex.unlock();
           return false;
         }
       }
       acknowledgers[seq].insert(ID);
+      ackers_mutex.unlock();
+
       return true;
     }
 
     bool hasAcknowledger(size_t seq, size_t ID) {
+      bool val = true;
+      ackers_mutex.lock();
       if (acknowledgers.find(seq) == acknowledgers.end()) {
-        return false;
+        val = false;
+      } else {
+        if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
+          val = false;
+        }
       }
-      if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
-        return false;
-      }
-      return true;
+      ackers_mutex.unlock();
+      return val;
     }
 
     // Return true if the value was changed
@@ -105,6 +114,7 @@ public:
     }
 
   private:
+    std::mutex ackers_mutex;
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
       int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));

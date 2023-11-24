@@ -41,4 +41,5 @@ public:
 };
 
 Message unmarshal(Parser::Host *from, char *buffer);
+bool isAckedBy(Message const&, Message const&, Parser::Host*);
 void ttyLog(std::string message);

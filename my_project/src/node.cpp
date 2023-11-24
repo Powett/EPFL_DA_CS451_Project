@@ -34,20 +34,27 @@ void Node::bebListener() {
     auto fromHost = Parser::findHostByID(rcv.fromID, hosts);
 
     relayHost->lastPing = std::time(nullptr);
-    if (rcv.seq==0){
-      // special PING message, ignore
-      #ifdef DEBUG_MODE
-    ttyLog("[L] Received PING from " + std::to_string(fromHost->id));
+    if (rcv.seq == 0) {
+// special PING message, ignore
+#ifdef DEBUG_MODE
+      ttyLog("[L] Received PING from " + std::to_string(fromHost->id));
 #endif
       continue;
-
     }
-    bebDeliver(rcv, relayHost, fromHost);
+    if (rcv.ack) {
+      // stop sending the message to the relay
+      pending.remove_acked_by(rcv, relayHost);
+    } else {
+      // Send an ack to the relay
+      Message *ack = new Message(relayHost, "", rcv.fromID, true, rcv.seq);
+      pending.push(ack);
+      bebDeliver(rcv, relayHost, fromHost);
 #ifdef DEBUG_MODE
-    ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) +
-           ", relayed by: " + std::to_string(relayHost->id) +
-           ", content: " + buffer);
+      ttyLog("[L] Received msg from " + std::to_string(fromHost->id) +
+             ", relayed by: " + std::to_string(relayHost->id) +
+             ", content: " + buffer);
 #endif
+    }
   }
 #ifdef DEBUG_MODE
   ttyLog("[L] Listener exit");
@@ -72,21 +79,13 @@ void Node::bebSender() {
       continue;
     }
     auto fromHost = Parser::findHostByID(current->fromID, hosts);
-    if (current->destHost->crashed){
+    if (current->destHost->crashed) {
 #ifdef DEBUG_MODE
       ttyLog("[S] Skipping send to crashed node");
 #endif
       delete current;
       continue;
     }
-//     if (current->seq !=0 && fromHost->lastDelivered>=current->seq) {
-//       #ifdef DEBUG_MODE
-//       ttyLog("[S] Skipping send of message older than delivered");
-// #endif
-//       delete current;
-//       continue;
-//     }
-
     // Marshal message
     ssize_t len = current->marshal(buffer);
     // Send message
@@ -124,34 +123,6 @@ void Node::bebDeliver(Message &m, Parser::Host *relayH, Parser::Host *fromH) {
   ttyLog("[L] bebDelivered message " + std::to_string(m.seq) + " from: " +
          std::to_string(fromH->id) + " through: " + std::to_string(relayH->id));
 #endif
-  // Check for deliverable messages
-  for (auto &d_host : hosts) {
-    bool all_ack = true;
-    for (auto &host : hosts) {
-      if (host->crashed) {
-        continue;
-      }
-      if (!d_host->hasAcknowledger(d_host->lastDelivered + 1, host->id)) {
-#ifdef DEBUG_MODE
-        ttyLog("[L] Cannot deliver, " + std::to_string(host->id) +
-               " has not acknowledged msg from " + std::to_string(d_host->id) +
-               " n°" + std::to_string(d_host->lastDelivered + 1));
-#endif
-        all_ack = false;
-        break;
-      }
-    }
-    if (all_ack) {
-      d_host->lastDelivered++;
-      logFile << "d " << d_host->id << " " << d_host->lastDelivered
-              << std::endl;
-#ifdef DEBUG_MODE
-      ttyLog("[L] Delivered message " + std::to_string(d_host->lastDelivered) +
-             " from: " + std::to_string(d_host->id));
-#endif
-    }
-  }
-
   // if (relay, m) are not in forwarded, add and forward
   if (fromH->testSetForwarded(m.seq)) {
     bebBroadcast(m.msg, m.seq, fromH->id);
@@ -171,9 +142,7 @@ void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
   }
 }
 
-void Node::bebPing(size_t fromID){
-  bebBroadcast("ping", 0, fromID);
-}
+void Node::bebPing(size_t fromID) { bebBroadcast("ping", 0, fromID); }
 
 void Node::failureDetector() {
   sleep(5); // do not start suspecting too soon
@@ -184,11 +153,46 @@ void Node::failureDetector() {
       // do not suspect self!
       if (host->id != id && !host->crashed && difftime(t, host->lastPing) > 3) {
         host->crashed = true;
-// #ifdef DEBUG_MODE
+        // #ifdef DEBUG_MODE
         ttyLog("[P] Suspecting " + std::to_string(host->id));
-// #endif
+        // #endif
       }
     }
+    tryDeliver();
     usleep(500);
+  }
+}
+
+void Node::tryDeliver() {
+  // Check for deliverable messages
+  for (auto &d_host : hosts) {
+    bool all_ack = true;
+    while (all_ack) {
+      for (auto &host : hosts) {
+        if (host->crashed) {
+          continue;
+        }
+        if (!d_host->hasAcknowledger(d_host->lastDelivered + 1, host->id)) {
+#ifdef DEBUG_MODE
+          ttyLog("[L] Cannot deliver, " + std::to_string(host->id) +
+                 " has not acknowledged msg from " +
+                 std::to_string(d_host->id) + " n°" +
+                 std::to_string(d_host->lastDelivered + 1));
+#endif
+          all_ack = false;
+          break;
+        }
+      }
+      if (all_ack) {
+        d_host->lastDelivered++;
+        logFile << "d " << d_host->id << " " << d_host->lastDelivered
+                << std::endl;
+#ifdef DEBUG_MODE
+        ttyLog("[L] Delivered message " +
+               std::to_string(d_host->lastDelivered) +
+               " from: " + std::to_string(d_host->id));
+#endif
+      }
+    }
   }
 }

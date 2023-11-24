@@ -47,6 +47,44 @@ Message *PendingList::pop() {
   return prev;
 }
 
+size_t PendingList::remove_acked_by(Message const& ack, Parser::Host* relay) {
+  size_t nb = 0;
+  mut.lock();
+  if (empty()) {
+    mut.unlock();
+    return nb;
+  }
+  Message *prev;
+  while (isAckedBy(*first, ack, relay)) {
+    prev = first;
+    first = first->next;
+    delete prev;
+    nb++;
+    if (!first) {
+      last = nullptr; // we removed the whole list
+      mut.unlock();
+      return nb;
+    }
+  }
+  Message *current = first->next;
+  prev = first;
+  while (current) {
+    if (isAckedBy(*current,ack, relay)) {
+      prev->next = current->next;
+      if (current == last) { // we removed the last element
+        last = prev;
+      }
+      delete current;
+      nb++;
+    } else {
+      prev = current;
+    }
+    current = prev->next;
+  }
+  mut.unlock();
+  return nb;
+}
+
 bool PendingList::empty() { return first == nullptr; }
 bool PendingList::safe_empty(){
   mut.lock();

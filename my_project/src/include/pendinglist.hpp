@@ -2,6 +2,7 @@
 #include <mutex>
 #include <ostream>
 
+#include "parser.hpp"
 class Message;
 
 // Thread-safe LinkedList to store Messages
@@ -11,6 +12,7 @@ public:
   void push(Message *);
   void push_last(Message *);
   void unsafe_push_last(Message *);
+  size_t remove_acked_by(Message const&, Parser::Host*);
   bool safe_empty();
   Message *pop();
   std::ostream &display(std::ostream &out);

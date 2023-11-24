@@ -111,7 +111,7 @@ ssize_t Message::marshal(char *buffer) {
 }
 
 // Format: $A:$N:$MSG
-Message unmarshal(Parser::Host *from, char *buffer) {
+Message unmarshal(Parser::Host *relay, char *buffer) {
   std::string payload = std::string(buffer);
   bool ack = payload[0] == 'a';
   payload = payload.substr(2);
@@ -134,5 +134,10 @@ Message unmarshal(Parser::Host *from, char *buffer) {
             << "\", type:" << (ack ? "a" : "b") << ", seq:" << seq
             << ", fromID: " << fromID << "}" << std::endl;
 #endif
-  return Message(from, msg, fromID, ack, seq);
+  return Message(relay, msg, fromID, ack, seq);
+}
+
+bool isAckedBy(Message const& m, Message const& ack, Parser::Host* relay){
+  // return ack.ack && !m.ack &&  m.destHost==relay && m.fromID==ack.fromID && m.seq==ack.seq;
+  return false;
 }
