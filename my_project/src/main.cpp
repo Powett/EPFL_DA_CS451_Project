@@ -16,9 +16,9 @@ using namespace std;
 
 thread listenerThread;
 thread senderThread;
-thread fdThread;
+thread messageManagerThread;
 
-Node* node;
+Node *node;
 
 static void stop(int) {
   // set default handlers
@@ -41,8 +41,8 @@ static void stop(int) {
     listenerThread.join();
   }
 
-  if (fdThread.joinable()) {
-    fdThread.join();
+  if (messageManagerThread.joinable()) {
+    messageManagerThread.join();
   }
 
   // log last messages
@@ -60,11 +60,12 @@ static void stop(int) {
   node->logFile.close();
 
   // Notify the exit
-  std::cout << "Exited from signal, sending queue was "  << (node->pending.safe_empty() ? "":"not") << " empty" << endl;
-  
+  std::cout << "Exited from signal, sending queue was "
+            << (node->pending.safe_empty() ? "" : "not") << " empty" << endl;
+
   // cleanup
   delete node;
-  
+
   // exit directly from signal handler
   exit(0);
 }
@@ -111,7 +112,6 @@ int main(int argc, char **argv) {
 #endif
   node->hosts = std::vector<Parser::Host *>(parser.hosts());
   node->id = parser.id();
-  Parser::Host *self_host = NULL;
 
   for (auto &host : node->hosts) {
 #ifdef DEBUG_MODE
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
     cout << "Machine: " << host->ip << ":" << host->port << endl;
 #endif
     if (host->id == node->id) {
-      self_host = host;
+      node->self_host = host;
 #ifdef DEBUG_MODE
       cout << " [self]";
 #endif
@@ -148,22 +148,19 @@ int main(int argc, char **argv) {
 
 // Create UDP socket
 #ifdef DEBUG_MODE
-  cout << "Creating socket on " << self_host->ipReadable() << ":"
-       << self_host->portReadable() << endl;
+  cout << "Creating socket on " << node->self_host->ipReadable() << ":"
+       << node->self_host->portReadable() << endl;
 #endif
-  UDPSocket sock = UDPSocket(self_host->ip, self_host->port);
+  UDPSocket sock = UDPSocket(node->self_host->ip, node->self_host->port);
   node->sock = &sock;
   // Open logfile
   node->logFile.open(parser.outputPath());
 
   // Build message queue
+  // Unsafe struct to store all messages to be sent eventually
   std::vector<std::string> messages;
-  // Start with a ping for PFD
-  node->bebPing(node->id);
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
     messages.push_back(to_string(i));
-    node->unsafe_bebBroadcast(to_string(i), i, node->id);
-    self_host->testSetForwarded(i);
     node->logFile << "b " << to_string(i) << std::endl;
   }
 
@@ -181,7 +178,8 @@ int main(int argc, char **argv) {
 
   // Start failure detector
 
-  fdThread = thread(&Node::failureDetector, node);
+  messageManagerThread =
+      thread(&Node::messageManager, node, std::ref(messages));
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";
