@@ -138,6 +138,6 @@ Message unmarshal(Parser::Host *relay, char *buffer) {
 }
 
 bool isAckedBy(Message const& m, Message const& ack, Parser::Host* relay){
-  return ack.ack && !m.ack &&  m.destHost==relay && m.fromID==ack.fromID && m.seq==ack.seq;
+  return ack.ack && !m.ack &&  m.destHost->id==relay->id && m.fromID==ack.fromID && m.seq==ack.seq;
   // return false;
 }

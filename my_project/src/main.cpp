@@ -61,7 +61,7 @@ static void stop(int) {
 
   // Notify the exit
   std::cout << "Exited from signal, sending queue was "
-            << (node->pending.safe_empty() ? "" : "not") << " empty" << endl;
+            << (node->pending.empty() ? "" : "not") << " empty" << endl;
 
   // cleanup
   delete node;

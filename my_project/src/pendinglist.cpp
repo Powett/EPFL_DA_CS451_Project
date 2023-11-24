@@ -4,7 +4,7 @@
 void PendingList::push(Message *m) {
   m->next = nullptr; // sanity
   mut.lock();
-  if (empty()) {
+  if (unsafe_empty()) {
     first = m;
     last = m;
   } else {
@@ -15,7 +15,7 @@ void PendingList::push(Message *m) {
 }
 void PendingList::unsafe_push_last(Message *m) {
   m->next = nullptr; // sanity
-  if (empty()) {
+  if (unsafe_empty()) {
     first = m;
     last = m;
     return;
@@ -32,7 +32,7 @@ void PendingList::push_last(Message *m) {
 
 Message *PendingList::pop() {
   mut.lock();
-  if (empty()) {
+  if (unsafe_empty()) {
     mut.unlock();
     return nullptr;
   }
@@ -47,48 +47,50 @@ Message *PendingList::pop() {
   return prev;
 }
 
-size_t PendingList::remove_acked_by(Message const& ack, Parser::Host* relay) {
-  size_t nb = 0;
-  mut.lock();
-  if (empty()) {
-    mut.unlock();
-    return nb;
-  }
-  Message *prev;
-  while (isAckedBy(*first, ack, relay)) {
-    prev = first;
-    first = first->next;
-    delete prev;
-    nb++;
-    if (!first) {
-      last = nullptr; // we removed the whole list
-      mut.unlock();
-      return nb;
-    }
-  }
-  Message *current = first->next;
-  prev = first;
-  while (current) {
-    if (isAckedBy(*current,ack, relay)) {
-      prev->next = current->next;
-      if (current == last) { // we removed the last element
-        last = prev;
-      }
-      delete current;
-      nb++;
-    } else {
-      prev = current;
-    }
-    current = prev->next;
-  }
-  mut.unlock();
-  return nb;
-}
+// size_t PendingList::remove_acked_by(Message const &ack, Parser::Host *relay) {
+//   size_t nb = 0;
+//   mut.lock();
+//   if (unsafe_empty()) {
+//     mut.unlock();
+//     return nb;
+//   }
+//   Message *prev;
+//   if (isAckedBy(*first, ack, relay)) {
+//     prev = first;
+//     first = first->next;
+//     delete prev;
+//     nb++;
+//     if (!first) {
+//       last = nullptr; // we removed the whole list
+//     }
+//     mut.unlock();
+//     return nb;
+//   }
+//   Message *current = first->next;
+//   prev = first;
+//   while (current) {
+//     if (isAckedBy(*current, ack, relay)) {
+//       prev->next = current->next;
+//       if (current == last) { // we removed the last element
+//         last = prev;
+//       }
+//       delete current;
+//       nb++;
+//       mut.unlock();
+//       return nb;
+//     } else {
+//       prev = current;
+//     }
+//     current = prev->next;
+//   }
+//   mut.unlock();
+//   return nb;
+// }
 
-bool PendingList::empty() { return first == nullptr; }
-bool PendingList::safe_empty(){
+bool PendingList::unsafe_empty() { return first == nullptr; }
+bool PendingList::empty() {
   mut.lock();
-  bool val = empty();
+  bool val = unsafe_empty();
   mut.unlock();
   return val;
 }

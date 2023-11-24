@@ -1,3 +1,3 @@
 #pragma once
 // #define DEBUG_MODE
-#define CHUNK_SIZE 800
+#define CHUNK_SIZE 40

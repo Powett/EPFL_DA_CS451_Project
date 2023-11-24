@@ -42,16 +42,16 @@ void Node::bebListener() {
       continue;
     }
     if (rcv.ack) {
-      // stop sending the message to the relay
-      // size_t nb = pending.remove_acked_by(rcv, relayHost);
-#ifdef DEBUG_MODE
-      ttyLog("[L] Removed " + std::to_string(nb) +
-             "messages to be sent that were acked");
-#endif
+//       // stop sending the message to the relay
+//       size_t nb = pending.remove_acked_by(rcv, relayHost);
+// #ifdef DEBUG_MODE
+//       ttyLog("[L] Removed " + std::to_string(nb) +
+//              "messages to be sent that were acked");
+// #endif
     } else {
-      // Send an ack to the relay
-      Message *ack = new Message(relayHost, "ack", rcv.fromID, true, rcv.seq);
-      pending.push(ack);
+      // // Send an ack to the relay
+      // Message *ack = new Message(relayHost, "ack", rcv.fromID, true, rcv.seq);
+      // pending.push(ack);
       bebDeliver(rcv, relayHost, fromHost);
 #ifdef DEBUG_MODE
       ttyLog("[L] Received msg from " + std::to_string(fromHost->id) +
@@ -76,17 +76,19 @@ void Node::messageManager(std::vector<std::string> &msgs) {
       std::cout << "Finished putting messages in the sending queue"
                 << std::endl;
     }
+    pending.mut.lock();
     while (!finished_sending && self_host->lastDelivered >= i) {
-      // Put 10 more messages in queue
+      // Put CHUNK_SIZE more messages in queue
       for (int j = 0; i < msgs.size() && j < CHUNK_SIZE; j++) {
-        bebBroadcast(msgs[i], i + 1, id);
+        unsafe_bebBroadcast(msgs[i], i + 1, id);
         i++;
       }
     }
+    pending.mut.unlock();
     // receive
     tryDeliver();
-    // sleep
-    usleep(250'000);
+    // // sleep
+    // usleep(250'000);
   }
 }
 
@@ -165,10 +167,9 @@ void Node::unsafe_bebBroadcast(std::string m, size_t seq, size_t fromID) {
   }
 }
 void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
-  for (auto &host : hosts) {
-    Message *current = new Message(host, m, fromID, false, seq);
-    pending.push_last(current); // could be optimized
-  }
+  pending.mut.lock();
+  unsafe_bebBroadcast(m, seq, fromID);
+  pending.mut.unlock();
 }
 
 void Node::bebPing() { bebBroadcast("ping", 0, id); }
@@ -176,7 +177,7 @@ void Node::bebPing() { bebBroadcast("ping", 0, id); }
 void Node::tryDeliver() {
   // Check for deliverable messages
   for (auto &d_host : hosts) {
-    while (d_host->acknowledgers[d_host->lastDelivered + 1].size() >
+    while (d_host->sizeAcknowledgers(d_host->lastDelivered + 1) >
            hosts.size() / 2) {
       d_host->lastDelivered++;
       logFile << "d " << d_host->id << " " << d_host->lastDelivered

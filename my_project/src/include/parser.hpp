@@ -87,19 +87,29 @@ public:
       return true;
     }
 
-    bool hasAcknowledger(size_t seq, size_t ID) {
-      bool val = true;
+    size_t sizeAcknowledgers(size_t seq){
+      size_t val=0;
       ackers_mutex.lock();
-      if (acknowledgers.find(seq) == acknowledgers.end()) {
-        val = false;
-      } else {
-        if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
-          val = false;
-        }
+      if (acknowledgers.find(seq) != acknowledgers.end()) {
+        val=acknowledgers[seq].size();
       }
       ackers_mutex.unlock();
       return val;
     }
+
+    // bool hasAcknowledger(size_t seq, size_t ID) {
+    //   bool val = true;
+    //   ackers_mutex.lock();
+    //   if (acknowledgers.find(seq) == acknowledgers.end()) {
+    //     val = false;
+    //   } else {
+    //     if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
+    //       val = false;
+    //     }
+    //   }
+    //   ackers_mutex.unlock();
+    //   return val;
+    // }
 
     // Return true if the value was changed
     bool testSetForwarded(size_t seq) {
