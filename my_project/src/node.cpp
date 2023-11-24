@@ -43,10 +43,14 @@ void Node::bebListener() {
     }
     if (rcv.ack) {
       // stop sending the message to the relay
-      pending.remove_acked_by(rcv, relayHost);
+      // size_t nb = pending.remove_acked_by(rcv, relayHost);
+#ifdef DEBUG_MODE
+      ttyLog("[L] Removed " + std::to_string(nb) +
+             "messages to be sent that were acked");
+#endif
     } else {
       // Send an ack to the relay
-      Message *ack = new Message(relayHost, "", rcv.fromID, true, rcv.seq);
+      Message *ack = new Message(relayHost, "ack", rcv.fromID, true, rcv.seq);
       pending.push(ack);
       bebDeliver(rcv, relayHost, fromHost);
 #ifdef DEBUG_MODE
@@ -145,7 +149,7 @@ void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
 void Node::bebPing(size_t fromID) { bebBroadcast("ping", 0, fromID); }
 
 void Node::failureDetector() {
-  sleep(5); // do not start suspecting too soon
+  // sleep(3); // do not start suspecting too soon
   time_t t;
   while (!stopThreads) {
     std::time(&t);

@@ -45,7 +45,8 @@ static void stop(int) {
     fdThread.join();
   }
 
-  // Clean pending: automatic destructor
+  // log last messages
+  node->tryDeliver();
 
   // clean hosts
   for (auto &host : node->hosts) {
