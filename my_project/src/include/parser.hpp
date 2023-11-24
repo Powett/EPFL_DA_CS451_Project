@@ -67,7 +67,7 @@ public:
     // maps a message sent by this host to its "was forwarded" value
     std::vector<bool> forwarded;
 
-    size_t lastDelivered;
+    std::atomic<size_t> lastDelivered;
     std::atomic_bool crashed;
 
     bool addAcknowledger(size_t seq, size_t ID) {

@@ -33,13 +33,21 @@ void Node::bebListener() {
     Message rcv = unmarshal(relayHost, buffer);
     auto fromHost = Parser::findHostByID(rcv.fromID, hosts);
 
+    relayHost->lastPing = std::time(nullptr);
+    if (rcv.seq==0){
+      // special PING message, ignore
+      #ifdef DEBUG_MODE
+    ttyLog("[L] Received PING from " + std::to_string(fromHost->id));
+#endif
+      continue;
+
+    }
+    bebDeliver(rcv, relayHost, fromHost);
 #ifdef DEBUG_MODE
     ttyLog("[L] Received (full) from " + std::to_string(fromHost->id) +
            ", relayed by: " + std::to_string(relayHost->id) +
            ", content: " + buffer);
 #endif
-    relayHost->lastPing = std::time(nullptr);
-    bebDeliver(rcv, relayHost, fromHost);
   }
 #ifdef DEBUG_MODE
   ttyLog("[L] Listener exit");
@@ -63,13 +71,21 @@ void Node::bebSender() {
 #endif
       continue;
     }
-    if (current->destHost->crashed) {
+    auto fromHost = Parser::findHostByID(current->fromID, hosts);
+    if (current->destHost->crashed){
 #ifdef DEBUG_MODE
       ttyLog("[S] Skipping send to crashed node");
 #endif
       delete current;
       continue;
     }
+//     if (current->seq !=0 && fromHost->lastDelivered>=current->seq) {
+//       #ifdef DEBUG_MODE
+//       ttyLog("[S] Skipping send of message older than delivered");
+// #endif
+//       delete current;
+//       continue;
+//     }
 
     // Marshal message
     ssize_t len = current->marshal(buffer);
@@ -155,6 +171,10 @@ void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
   }
 }
 
+void Node::bebPing(size_t fromID){
+  bebBroadcast("ping", 0, fromID);
+}
+
 void Node::failureDetector() {
   sleep(5); // do not start suspecting too soon
   time_t t;
@@ -162,11 +182,11 @@ void Node::failureDetector() {
     std::time(&t);
     for (auto &host : hosts) {
       // do not suspect self!
-      if (host->id != id && !host->crashed && difftime(t, host->lastPing) > 2) {
+      if (host->id != id && !host->crashed && difftime(t, host->lastPing) > 3) {
         host->crashed = true;
-#ifdef DEBUG_MODE
+// #ifdef DEBUG_MODE
         ttyLog("[P] Suspecting " + std::to_string(host->id));
-#endif
+// #endif
       }
     }
     usleep(500);

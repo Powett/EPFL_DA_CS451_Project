@@ -18,7 +18,7 @@ thread listenerThread;
 thread senderThread;
 thread fdThread;
 
-Node node;
+Node* node;
 
 static void stop(int) {
   // set default handlers
@@ -31,7 +31,7 @@ static void stop(int) {
 #endif
 
   // kill all threads
-  node.stopThreads = true;
+  node->stopThreads = true;
 
   if (senderThread.joinable()) {
     senderThread.join();
@@ -48,7 +48,7 @@ static void stop(int) {
   // Clean pending: automatic destructor
 
   // clean hosts
-  for (auto &host : node.hosts) {
+  for (auto &host : node->hosts) {
     delete host;
   }
 
@@ -56,8 +56,14 @@ static void stop(int) {
 #ifdef DEBUG_MODE
   cout << "Closing logfile.\n";
 #endif
-  node.logFile.close();
+  node->logFile.close();
 
+  // Notify the exit
+  std::cout << "Exited from signal, sending queue was "  << (node->pending.safe_empty() ? "":"not") << " empty" << endl;
+  
+  // cleanup
+  delete node;
+  
   // exit directly from signal handler
   exit(0);
 }
@@ -72,6 +78,7 @@ int main(int argc, char **argv) {
 
   Parser parser(argc, argv);
   parser.parse();
+  node = new Node();
 
 #ifdef DEBUG_MODE
   cout << "My PID: " << getpid() << "\n";
@@ -101,17 +108,17 @@ int main(int argc, char **argv) {
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
 #endif
-  node.hosts = parser.hosts();
-  node.id = parser.id();
+  node->hosts = std::vector<Parser::Host *>(parser.hosts());
+  node->id = parser.id();
   Parser::Host *self_host = NULL;
 
-  for (auto &host : node.hosts) {
+  for (auto &host : node->hosts) {
 #ifdef DEBUG_MODE
     cout << host->id << " : ";
     cout << host->ipReadable() << ":" << host->portReadable() << endl;
     cout << "Machine: " << host->ip << ":" << host->port << endl;
 #endif
-    if (host->id == parser.id()) {
+    if (host->id == node->id) {
       self_host = host;
 #ifdef DEBUG_MODE
       cout << " [self]";
@@ -144,32 +151,36 @@ int main(int argc, char **argv) {
        << self_host->portReadable() << endl;
 #endif
   UDPSocket sock = UDPSocket(self_host->ip, self_host->port);
-  node.sock = &sock;
+  node->sock = &sock;
   // Open logfile
-  node.logFile.open(parser.outputPath());
+  node->logFile.open(parser.outputPath());
 
   // Build message queue
+  std::vector<std::string> messages;
+  // Start with a ping for PFD
+  node->bebPing(node->id);
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    node.unsafe_bebBroadcast(to_string(i), i, parser.id());
+    messages.push_back(to_string(i));
+    node->unsafe_bebBroadcast(to_string(i), i, node->id);
     self_host->testSetForwarded(i);
-    node.logFile << "b " << to_string(i) << std::endl;
+    node->logFile << "b " << to_string(i) << std::endl;
   }
 
 #ifdef DEBUG_MODE
-  cout << "Message list:\n" << node.pending << endl;
+  cout << "Message list:\n" << node->pending << endl;
 #endif
 
   // Start listener(s)
 
-  listenerThread = thread(&Node::bebListener, &node);
+  listenerThread = thread(&Node::bebListener, node);
 
   // Start sender(s)
 
-  senderThread = thread(&Node::bebSender, &node);
+  senderThread = thread(&Node::bebSender, node);
 
   // Start failure detector
 
-  fdThread = thread(&Node::failureDetector, &node);
+  fdThread = thread(&Node::failureDetector, node);
 
 #ifdef DEBUG_MODE
   cout << "Broadcasting and delivering messages...\n\n";

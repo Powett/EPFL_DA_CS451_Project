@@ -11,6 +11,7 @@ public:
   void push(Message *);
   void push_last(Message *);
   void unsafe_push_last(Message *);
+  bool safe_empty();
   Message *pop();
   std::ostream &display(std::ostream &out);
   ~PendingList();

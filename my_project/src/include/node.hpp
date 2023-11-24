@@ -19,4 +19,5 @@ public:
   void bebDeliver(Message &, Parser::Host *, Parser::Host *);
   void bebBroadcast(std::string, size_t, size_t);
   void unsafe_bebBroadcast(std::string, size_t, size_t);
+  void bebPing(size_t);
 };

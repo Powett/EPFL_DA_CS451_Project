@@ -1,8 +1,8 @@
-- uniform reliable:
-  - failure detector
-  - resend
-    - store old
-    - put in sendqueue
+- check ok
+- opti:
+  - do not send if acknowledged (and delete)
+  - pfd feed sendqueue ?
+  - set/map to vector
 
 
 - p3 ?

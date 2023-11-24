@@ -48,7 +48,12 @@ Message *PendingList::pop() {
 }
 
 bool PendingList::empty() { return first == nullptr; }
-
+bool PendingList::safe_empty(){
+  mut.lock();
+  bool val = empty();
+  mut.unlock();
+  return val;
+}
 std::ostream &PendingList::display(std::ostream &out) {
   mut.lock();
   Message *current = first;
