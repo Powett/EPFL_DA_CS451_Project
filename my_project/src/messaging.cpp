@@ -51,7 +51,7 @@ UDPSocket::~UDPSocket() { close(sockfd); }
 ssize_t UDPSocket::unicast(const Parser::Host *host, const char *buffer,
                            ssize_t len, int flags) {
 
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 0
   ttyLog("Sending (full) message to " + host->fullAddressReadable() +
          ", msg: " + buffer);
 #endif
@@ -81,6 +81,10 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
   return ret;
 }
 
+std::string Message::uniqAckID() {
+  return std::to_string(fromID) + ":" + std::to_string(seq);
+}
+
 void ttyLog(std::string message) {
 #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
   std::cout << "Thread "
@@ -94,7 +98,7 @@ void ttyLog(std::string message) {
 // return total size
 ssize_t Message::marshal(char *buffer) {
   std::string payload;
-  payload += (ack ? "a" : "b");
+  payload += (isBebAck ? "a" : "b");
   payload += ":";
   payload += std::to_string(seq);
   payload += ":";
@@ -104,7 +108,7 @@ ssize_t Message::marshal(char *buffer) {
   ssize_t n = payload.length();
   strncpy(buffer, payload.c_str(), n + 1);
   buffer[n + 1] = '\0';
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   std::cout << "Marshalled msg: " << buffer << " size " << (n + 1) << std::endl;
 #endif
   return n;
@@ -129,15 +133,10 @@ Message unmarshal(Parser::Host *relay, char *buffer) {
   }
   size_t fromID = std::stoul(payload.substr(0, separator));
   std::string msg = payload.substr(separator + 1);
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   std::cout << "Unmarshalled msg: " << buffer << "-> {Msg:\"" << msg
             << "\", type:" << (ack ? "a" : "b") << ", seq:" << seq
             << ", fromID: " << fromID << "}" << std::endl;
 #endif
   return Message(relay, msg, fromID, ack, seq);
-}
-
-bool isAckedBy(Message const& m, Message const& ack, Parser::Host* relay){
-  return ack.ack && !m.ack &&  m.destHost->id==relay->id && m.fromID==ack.fromID && m.seq==ack.seq;
-  // return false;
 }

@@ -10,9 +10,8 @@ class PendingList {
 public:
   PendingList() : mut(), first(nullptr), last(nullptr) {}
   void push(Message *);
-  void push_last(Message *);
-  void unsafe_push_last(Message *);
-  size_t remove_acked_by(Message const&, Parser::Host*);
+  void push_back(Message *);
+  void unsafe_push_back(Message *);
   bool empty();
   Message *pop();
   std::ostream &display(std::ostream &out);

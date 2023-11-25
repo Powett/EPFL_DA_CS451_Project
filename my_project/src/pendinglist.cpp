@@ -13,7 +13,7 @@ void PendingList::push(Message *m) {
   }
   mut.unlock();
 }
-void PendingList::unsafe_push_last(Message *m) {
+void PendingList::unsafe_push_back(Message *m) {
   m->next = nullptr; // sanity
   if (unsafe_empty()) {
     first = m;
@@ -24,9 +24,9 @@ void PendingList::unsafe_push_last(Message *m) {
   last = m;
 }
 
-void PendingList::push_last(Message *m) {
+void PendingList::push_back(Message *m) {
   mut.lock();
-  unsafe_push_last(m);
+  unsafe_push_back(m);
   mut.unlock();
 }
 
@@ -47,46 +47,6 @@ Message *PendingList::pop() {
   return prev;
 }
 
-// size_t PendingList::remove_acked_by(Message const &ack, Parser::Host *relay) {
-//   size_t nb = 0;
-//   mut.lock();
-//   if (unsafe_empty()) {
-//     mut.unlock();
-//     return nb;
-//   }
-//   Message *prev;
-//   if (isAckedBy(*first, ack, relay)) {
-//     prev = first;
-//     first = first->next;
-//     delete prev;
-//     nb++;
-//     if (!first) {
-//       last = nullptr; // we removed the whole list
-//     }
-//     mut.unlock();
-//     return nb;
-//   }
-//   Message *current = first->next;
-//   prev = first;
-//   while (current) {
-//     if (isAckedBy(*current, ack, relay)) {
-//       prev->next = current->next;
-//       if (current == last) { // we removed the last element
-//         last = prev;
-//       }
-//       delete current;
-//       nb++;
-//       mut.unlock();
-//       return nb;
-//     } else {
-//       prev = current;
-//     }
-//     current = prev->next;
-//   }
-//   mut.unlock();
-//   return nb;
-// }
-
 bool PendingList::unsafe_empty() { return first == nullptr; }
 bool PendingList::empty() {
   mut.lock();
@@ -99,7 +59,7 @@ std::ostream &PendingList::display(std::ostream &out) {
   Message *current = first;
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
-        << (current->ack ? " a" : " b") << ":" << current->seq << ":"
+        << (current->isBebAck ? " a" : " b") << ":" << current->seq << ":"
         << "\"" << current->msg << "\"";
     if (current != last) {
       out << "->";

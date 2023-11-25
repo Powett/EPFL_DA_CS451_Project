@@ -30,16 +30,17 @@ public:
   Message() = default;
   Message(Parser::Host *d, std::string m, size_t fromID, bool ack = false,
           size_t seq = 0, Message *next = nullptr)
-      : destHost(d), msg(m), ack(ack), seq(seq), fromID(fromID), next(next){};
+      : destHost(d), msg(m), isBebAck(ack), seq(seq), fromID(fromID),
+        next(next){};
   Parser::Host *destHost;
   std::string msg;
-  bool ack;
+  bool isBebAck;
   size_t seq;
   size_t fromID;
   Message *next;
   ssize_t marshal(char *buffer);
+  std::string uniqAckID();
 };
 
 Message unmarshal(Parser::Host *from, char *buffer);
-bool isAckedBy(Message const&, Message const&, Parser::Host*);
 void ttyLog(std::string message);

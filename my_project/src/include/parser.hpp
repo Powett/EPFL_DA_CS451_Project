@@ -22,9 +22,8 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <mutex>
-#include <ctime>
 #include <map>
+#include <mutex>
 #include <unordered_set>
 
 class Parser {
@@ -32,9 +31,8 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, lastPing(std::time(nullptr)),
-          acknowledgers(std::map<size_t, std::unordered_set<size_t>>()),
-          forwarded(), lastDelivered(0), crashed(false), ackers_mutex() {
+        : id{id}, port{htons(port)}, bebAcked(), bebAckedMut(),
+          urbAcknowledgers(), urbAckersMut(), forwarded() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -60,71 +58,68 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    std::time_t lastPing;
+    // all bebAcked messages, with unique id "fromID:seq"
+    std::unordered_set<std::string> bebAcked;
+    // and its mutex
+    std::mutex bebAckedMut;
+
     // maps a message seqN to nodesID having acknowledged it
-    std::map<size_t, std::unordered_set<size_t>> acknowledgers;
+    std::map<size_t, std::unordered_set<size_t>> urbAcknowledgers;
+    // and its mutex
+    std::mutex urbAckersMut;
 
     // one-thread only
     // maps a message sent by this host to its "was forwarded" value
-    std::vector<bool> forwarded;
+    std::unordered_set<size_t> forwarded;
 
-    std::atomic<size_t> lastDelivered;
-    std::atomic_bool crashed;
+    void addBebAcked(std::string mID) {
+      bebAckedMut.lock();
+      bebAcked.insert(mID);
+      bebAckedMut.unlock();
+    }
+
+    bool hasBebAcked(std::string mID) {
+      bool in = false;
+      bebAckedMut.lock();
+      in = bebAcked.find(mID) != bebAcked.end();
+      bebAckedMut.unlock();
+      return in;
+    }
 
     bool addAcknowledger(size_t seq, size_t ID) {
-      ackers_mutex.lock();
-      if (acknowledgers.find(seq) == acknowledgers.end()) {
-        acknowledgers[seq] = std::unordered_set<size_t>();
+      urbAckersMut.lock();
+      if (urbAcknowledgers.find(seq) == urbAcknowledgers.end()) {
+        urbAcknowledgers[seq] = std::unordered_set<size_t>();
       } else {
-        if (acknowledgers[seq].find(ID) != acknowledgers[seq].end()) {
-          ackers_mutex.unlock();
+        if (urbAcknowledgers[seq].find(ID) != urbAcknowledgers[seq].end()) {
+          urbAckersMut.unlock();
           return false;
         }
       }
-      acknowledgers[seq].insert(ID);
-      ackers_mutex.unlock();
+      urbAcknowledgers[seq].insert(ID);
+      urbAckersMut.unlock();
 
       return true;
     }
 
-    size_t sizeAcknowledgers(size_t seq){
-      size_t val=0;
-      ackers_mutex.lock();
-      if (acknowledgers.find(seq) != acknowledgers.end()) {
-        val=acknowledgers[seq].size();
+    size_t sizeAcknowledgers(size_t seq) {
+      size_t val = 0;
+      urbAckersMut.lock();
+      if (urbAcknowledgers.find(seq) != urbAcknowledgers.end()) {
+        val = urbAcknowledgers[seq].size();
       }
-      ackers_mutex.unlock();
+      urbAckersMut.unlock();
       return val;
     }
 
-    // bool hasAcknowledger(size_t seq, size_t ID) {
-    //   bool val = true;
-    //   ackers_mutex.lock();
-    //   if (acknowledgers.find(seq) == acknowledgers.end()) {
-    //     val = false;
-    //   } else {
-    //     if (acknowledgers[seq].find(ID) == acknowledgers[seq].end()) {
-    //       val = false;
-    //     }
-    //   }
-    //   ackers_mutex.unlock();
-    //   return val;
-    // }
-
     // Return true if the value was changed
-    bool testSetForwarded(size_t seq) {
-      while (forwarded.size() < seq) {
-        forwarded.push_back(false);
-      }
-      if (forwarded[seq]) {
-        return false;
-      }
-      forwarded[seq] = true;
-      return true;
+    bool addForwarded(size_t seq) {
+      size_t len = forwarded.size();
+      forwarded.insert(seq);
+      return forwarded.size() != len;
     }
 
   private:
-    std::mutex ackers_mutex;
     bool isValidIpAddress(const char *ipAddress) {
       struct sockaddr_in sa;
       int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));

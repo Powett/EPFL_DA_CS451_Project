@@ -16,7 +16,6 @@ using namespace std;
 
 thread listenerThread;
 thread senderThread;
-thread messageManagerThread;
 
 Node *node;
 
@@ -26,7 +25,7 @@ static void stop(int) {
   signal(SIGINT, SIG_DFL);
 
   // immediately stop network packet processing
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 0
   cout << "Stopping network packet processing.\n";
 #endif
 
@@ -41,11 +40,7 @@ static void stop(int) {
     listenerThread.join();
   }
 
-  if (messageManagerThread.joinable()) {
-    messageManagerThread.join();
-  }
-
-  // log last messages
+  // log messages
   node->tryDeliver();
 
   // clean hosts
@@ -54,7 +49,7 @@ static void stop(int) {
   }
 
 // Closing logFile
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 0
   cout << "Closing logfile.\n";
 #endif
   node->logFile.close();
@@ -82,21 +77,21 @@ int main(int argc, char **argv) {
   parser.parse();
   node = new Node();
 
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "My PID: " << getpid() << "\n";
   cout << "From a new terminal type `kill -SIGINT " << getpid()
        << "` or `kill -SIGTERM " << getpid()
        << "` to stop processing packets\n\n";
 #endif
 
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "My ID: " << parser.id() << "\n\n";
 #endif
 
   // Parse config file
   Parser::FIFOBroadcastConfig fb_vals = {0};
   fb_vals = parser.fifoBroadcastValues();
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
 
   cout << "FIFO Broadcast config:" << endl;
   cout << "==========================\n";
@@ -106,7 +101,7 @@ int main(int argc, char **argv) {
 #endif
 
 // Parse hosts file
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "List of resolved hosts is:\n";
   cout << "==========================\n";
 #endif
@@ -114,32 +109,32 @@ int main(int argc, char **argv) {
   node->id = parser.id();
 
   for (auto &host : node->hosts) {
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 0
     cout << host->id << " : ";
     cout << host->ipReadable() << ":" << host->portReadable() << endl;
     cout << "Machine: " << host->ip << ":" << host->port << endl;
 #endif
     if (host->id == node->id) {
       node->self_host = host;
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
       cout << " [self]";
 #endif
     }
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
     cout << endl;
 #endif
   }
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << endl;
 #endif
 
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "Path to output:\n";
   cout << "===============\n";
   cout << parser.outputPath() << "\n\n";
 #endif
 
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "Path to config:\n";
   cout << "===============\n";
   cout << parser.configPath() << "\n\n";
@@ -147,7 +142,7 @@ int main(int argc, char **argv) {
 #endif
 
 // Create UDP socket
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 1
   cout << "Creating socket on " << node->self_host->ipReadable() << ":"
        << node->self_host->portReadable() << endl;
 #endif
@@ -156,18 +151,14 @@ int main(int argc, char **argv) {
   // Open logfile
   node->logFile.open(parser.outputPath());
 
-  // Build message queue
-  // Unsafe struct to store all messages to be sent eventually
-  std::vector<std::string> messages;
+  // #if DEBUG_MODE > 0
+  //   cout << "Message list:\n" << node->pending << endl;
+  // #endif
+
+  // Log all broadcast attempts (for outputs uniformity)
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    messages.push_back(to_string(i));
-    node->logFile << "b " << to_string(i) << std::endl;
+    node->logFile << "b " << i << std::endl;
   }
-
-#ifdef DEBUG_MODE
-  cout << "Message list:\n" << node->pending << endl;
-#endif
-
   // Start listener(s)
 
   listenerThread = thread(&Node::bebListener, node);
@@ -176,12 +167,13 @@ int main(int argc, char **argv) {
 
   senderThread = thread(&Node::bebSender, node);
 
-  // Start failure detector
+  for (int i = 1; i <= fb_vals.nb_messages; i++) {
+    node->self_host->addAcknowledger(i, node->id);
+    node->bebBroadcast("", i, node->id);
+    usleep(WAIT_US);
+  }
 
-  messageManagerThread =
-      thread(&Node::messageManager, node, std::ref(messages));
-
-#ifdef DEBUG_MODE
+#if DEBUG_MODE > 0
   cout << "Broadcasting and delivering messages...\n\n";
 #endif
 
