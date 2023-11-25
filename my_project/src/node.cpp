@@ -26,7 +26,7 @@ void Node::bebListener() {
     }
 
     // Unmarshal message
-    Message rcv = unmarshal(relayHost, buffer);
+    Message rcv = unmarshal(buffer);
     auto fromHost = Parser::findHostByID(rcv.fromID, hosts);
 
     if (rcv.isBebAck) {
@@ -36,7 +36,7 @@ void Node::bebListener() {
       Message *ack = new Message(relayHost, "ack", rcv.fromID, true, rcv.seq);
       pending.push(ack);
 
-      // If the message was already delivered, no need to continue
+      // If the message can already delivered, no need to continue
       if (canDeliver(fromHost, rcv.seq)) {
 #if DEBUG_MODE > 0
         ttyLog("[L] Skipping deliverable message: " + rcv.uniqAckID());
@@ -130,13 +130,17 @@ void Node::bebDeliver(Message &m, Parser::Host *relayH, Parser::Host *fromH) {
     ttyLog("[L] forwarded message: " + m.uniqAckID());
 #endif
     bebBroadcast(m.msg, m.seq, m.fromID);
+  } else {
+#if DEBUG_MODE > 0
+    ttyLog("[L] Already forwarded message: " + m.uniqAckID());
+#endif
   }
 }
 
 void Node::unsafe_bebBroadcast(std::string m, size_t seq, size_t fromID) {
   for (auto &host : hosts) {
     Message *current = new Message(host, m, fromID, false, seq);
-    pending.unsafe_push_back(current); // no multithreading yet
+    pending.unsafe_push_back(current); // no multithreading
   }
 }
 void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
@@ -154,16 +158,18 @@ void Node::tryDeliver() {
   for (auto &d_host : hosts) {
     size_t seq = 1;
     while (canDeliver(d_host, seq)) {
-      seq++;
       logFile << "d " << d_host->id << " " << seq << std::endl;
 #if DEBUG_MODE > 0
       ttyLog("[L] Delivered message " + std::to_string(seq) +
              " from: " + std::to_string(d_host->id));
 #endif
+      seq++;
     }
+#if DEBUG_MODE > 0
     for (size_t i = 1; i <= 1000; i++) {
       std::cout << i << ", nb of forwarders: " << d_host->sizeAcknowledgers(i)
                 << std::endl;
     }
+#endif
   }
 }

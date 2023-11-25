@@ -158,6 +158,7 @@ int main(int argc, char **argv) {
   // Log all broadcast attempts (for outputs uniformity)
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
     node->logFile << "b " << i << std::endl;
+    node->self_host->addAcknowledger(i, node->id);
   }
   // Start listener(s)
 
@@ -168,7 +169,6 @@ int main(int argc, char **argv) {
   senderThread = thread(&Node::bebSender, node);
 
   for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    node->self_host->addAcknowledger(i, node->id);
     node->bebBroadcast("", i, node->id);
     usleep(WAIT_US);
   }

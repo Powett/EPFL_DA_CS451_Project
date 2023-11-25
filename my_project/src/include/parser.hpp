@@ -32,7 +32,7 @@ public:
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
         : id{id}, port{htons(port)}, bebAcked(), bebAckedMut(),
-          urbAcknowledgers(), urbAckersMut(), forwarded() {
+          urbAcknowledgers(), forwarded() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -58,15 +58,14 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    // all bebAcked messages, with unique id "fromID:seq"
+    // all beb messages this host has acked with unique id "fromID:seq"
     std::unordered_set<std::string> bebAcked;
     // and its mutex
     std::mutex bebAckedMut;
 
     // maps a message seqN to nodesID having acknowledged it
+    // not accessed concurrently
     std::map<size_t, std::unordered_set<size_t>> urbAcknowledgers;
-    // and its mutex
-    std::mutex urbAckersMut;
 
     // one-thread only
     // maps a message sent by this host to its "was forwarded" value
@@ -87,28 +86,23 @@ public:
     }
 
     bool addAcknowledger(size_t seq, size_t ID) {
-      urbAckersMut.lock();
       if (urbAcknowledgers.find(seq) == urbAcknowledgers.end()) {
         urbAcknowledgers[seq] = std::unordered_set<size_t>();
       } else {
         if (urbAcknowledgers[seq].find(ID) != urbAcknowledgers[seq].end()) {
-          urbAckersMut.unlock();
           return false;
         }
       }
       urbAcknowledgers[seq].insert(ID);
-      urbAckersMut.unlock();
 
       return true;
     }
 
     size_t sizeAcknowledgers(size_t seq) {
       size_t val = 0;
-      urbAckersMut.lock();
       if (urbAcknowledgers.find(seq) != urbAcknowledgers.end()) {
         val = urbAcknowledgers[seq].size();
       }
-      urbAckersMut.unlock();
       return val;
     }
 

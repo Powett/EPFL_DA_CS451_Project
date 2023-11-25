@@ -115,7 +115,7 @@ ssize_t Message::marshal(char *buffer) {
 }
 
 // Format: $A:$N:$MSG
-Message unmarshal(Parser::Host *relay, char *buffer) {
+Message unmarshal(char *buffer) {
   std::string payload = std::string(buffer);
   bool ack = payload[0] == 'a';
   payload = payload.substr(2);
@@ -138,5 +138,5 @@ Message unmarshal(Parser::Host *relay, char *buffer) {
             << "\", type:" << (ack ? "a" : "b") << ", seq:" << seq
             << ", fromID: " << fromID << "}" << std::endl;
 #endif
-  return Message(relay, msg, fromID, ack, seq);
+  return Message(nullptr, msg, fromID, ack, seq);
 }

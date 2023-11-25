@@ -42,5 +42,5 @@ public:
   std::string uniqAckID();
 };
 
-Message unmarshal(Parser::Host *from, char *buffer);
+Message unmarshal(char *buffer);
 void ttyLog(std::string message);
