@@ -59,8 +59,7 @@ std::ostream &PendingList::display(std::ostream &out) {
   Message *current = first;
   while (current) {
     out << "|to:" << current->destHost->fullAddressReadable()
-        << (current->isBebAck ? " a" : " b") << ":" << current->seq << ":"
-        << "\"" << current->msg << "\"";
+        << current->to_string();
     if (current != last) {
       out << "->";
     }

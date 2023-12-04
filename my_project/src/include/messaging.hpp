@@ -8,10 +8,13 @@
 
 #include "parser.hpp"
 #include "pendinglist.hpp"
+#include "defines.hpp"
 
 #define MAX_PACKET_LENGTH 1024
 #define LOCALHOST "127.0.0.1"
 #define DEFAULTPORT 0
+
+#define BEBSEPARATOR ':'
 
 class UDPSocket {
 public:
@@ -27,20 +30,40 @@ private:
 
 class Message {
 public:
-  Message() = default;
-  Message(Parser::Host *d, std::string m, size_t fromID, bool ack = false,
-          size_t seq = 0, Message *next = nullptr)
-      : destHost(d), msg(m), isBebAck(ack), seq(seq), fromID(fromID),
-        next(next){};
+  Message(Parser::Host *d, LAMessage msg, std::string uniqAckID,
+          bool ack = false, Message *next = nullptr)
+      : destHost(d), laMsg(msg), uniqAckID(uniqAckID), isBebAck(ack), next(next){};
+  
+  // Format: $bebAck:$UniqID:$LAMSG
+  // To unmarshall
+  Message(std::string const& s): destHost(nullptr){
+  #if DEBUG_MODE > 2
+    std::cout << "Unmarshalling msg: {" << s << "}" << std::endl;
+  #endif
+    std::string payload = s;
+    isBebAck = payload[0] == 'a';
+    payload = payload.substr(2);
+    size_t separator = payload.find(BEBSEPARATOR);
+    if (separator == std::string::npos) {
+      std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
+      return;  
+    }
+    uniqAckID = payload.substr(0,separator);
+    payload=payload.substr(separator+1);
+    laMsg = LAMessage(payload);
+  #if DEBUG_MODE > 2
+    std::cout << "Unmarshalled msg: " << (isBebAck ? "bebA" : "bebB") << ", ackID:" << uniqAckID
+              << " LA: " << laMsg.to_string() << "}" << std::endl;
+  #endif
+  }
   Parser::Host *destHost;
-  std::string msg;
+  LAMessage laMsg;
+  std::string uniqAckID;
   bool isBebAck;
-  size_t seq;
-  size_t fromID;
   Message *next;
   ssize_t marshal(char *buffer);
-  std::string uniqAckID();
+  std::string to_string() const;
 };
 
-Message unmarshal(char *buffer);
 void ttyLog(std::string message);
+std::ostream &operator<<(std::ostream &out, Message const&m);

@@ -1,2 +1,22 @@
 
-- p3 ?
+- enlever bails urb
+- types de message: PROPOSAL, ACK, NACK
+- attributs: {type, value, proposal_ID, round_ID}
+- tableau de proposals: {proposed_value, accepted_value, ack, nack, current_proposal_ID, active}, taille donnée en config p
+- 
+- main:
+  - envoyer tous les broadcast 1er round
+
+- listener:
+  - listen & answer w/ ACK/NACK or drop
+  - ACK:
+    - inc ack
+  - NACK:
+    - inc nack
+    - union prop_value
+  - either ACK/NACK: check next_step
+  - proposal:
+    - union/assign accepted_value
+    - answer ACK/NACK   
+
+- sender: no change

@@ -26,13 +26,14 @@
 #include <mutex>
 #include <unordered_set>
 
+#include "lattice.hpp"
+
 class Parser {
 public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, bebAcked(), bebAckedMut(),
-          urbAcknowledgers(), forwarded() {
+        : id{id}, port{htons(port)}, bebAcked(), bebAckedMut() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -58,18 +59,10 @@ public:
              std::to_string(static_cast<int>(portReadable()));
     }
 
-    // all beb messages this host has acked with unique id "fromID:seq"
+    // all beb messages this host has acked with unique id "fromID/seq"
     std::unordered_set<std::string> bebAcked;
     // and its mutex
     std::mutex bebAckedMut;
-
-    // maps a message seqN to nodesID having acknowledged it
-    // not accessed concurrently
-    std::map<size_t, std::unordered_set<size_t>> urbAcknowledgers;
-
-    // one-thread only
-    // maps a message sent by this host to its "was forwarded" value
-    std::unordered_set<size_t> forwarded;
 
     void addBebAcked(std::string mID) {
       bebAckedMut.lock();
@@ -83,34 +76,6 @@ public:
       in = bebAcked.find(mID) != bebAcked.end();
       bebAckedMut.unlock();
       return in;
-    }
-
-    bool addAcknowledger(size_t seq, size_t ID) {
-      if (urbAcknowledgers.find(seq) == urbAcknowledgers.end()) {
-        urbAcknowledgers[seq] = std::unordered_set<size_t>();
-      } else {
-        if (urbAcknowledgers[seq].find(ID) != urbAcknowledgers[seq].end()) {
-          return false;
-        }
-      }
-      urbAcknowledgers[seq].insert(ID);
-
-      return true;
-    }
-
-    size_t sizeAcknowledgers(size_t seq) {
-      size_t val = 0;
-      if (urbAcknowledgers.find(seq) != urbAcknowledgers.end()) {
-        val = urbAcknowledgers[seq].size();
-      }
-      return val;
-    }
-
-    // Return true if the value was changed
-    bool addForwarded(size_t seq) {
-      size_t len = forwarded.size();
-      forwarded.insert(seq);
-      return forwarded.size() != len;
     }
 
   private:
@@ -161,8 +126,16 @@ public:
 
   struct FIFOBroadcastConfig {
     int nb_messages;
-    FIFOBroadcastConfig() {}
+    FIFOBroadcastConfig() = default;
     FIFOBroadcastConfig(int nb_messages) : nb_messages(nb_messages){};
+  };
+
+  struct LAConfig {
+    size_t p;
+    size_t vs;
+    size_t ds;
+    std::vector<LAValue> proposed_values;
+    LAConfig() = default;
   };
 
 public:
@@ -280,15 +253,24 @@ public:
     return NULL;
   }
 
-  FIFOBroadcastConfig fifoBroadcastValues() {
+  LAConfig laConfigValues() {
     std::ifstream configFile(configPath());
-    FIFOBroadcastConfig values;
+    LAConfig values;
     if (!configFile.is_open()) {
       std::ostringstream os;
       os << "`" << configPath() << "` does not exist.";
       throw std::invalid_argument(os.str());
     }
-    configFile >> values.nb_messages;
+    configFile >> values.p;
+    configFile >> values.vs;
+    configFile >> values.ds;
+    configFile >> std::ws;
+    for(size_t i(0);i<values.p;i++) {
+      std::string line;
+      std::getline(configFile, line);
+      std::cout << "Got line: " << line << std::endl;
+      values.proposed_values.push_back(lavals_from_string(line));
+    }
     return values;
   }
 

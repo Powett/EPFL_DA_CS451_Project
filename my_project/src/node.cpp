@@ -26,28 +26,18 @@ void Node::bebListener() {
     }
 
     // Unmarshal message
-    Message rcv = unmarshal(buffer);
-    auto fromHost = Parser::findHostByID(rcv.fromID, hosts);
+    std::string rcv_s = std::string(buffer);
+    Message rcv(rcv_s);
 
     if (rcv.isBebAck) {
-      relayHost->addBebAcked(rcv.uniqAckID());
+      relayHost->addBebAcked(rcv.uniqAckID);
     } else {
       // Send an ack to the relay
-      Message *ack = new Message(relayHost, "ack", rcv.fromID, true, rcv.seq);
+      Message *ack = new Message(relayHost, rcv.laMsg,  rcv.uniqAckID, true);
       pending.push(ack);
-
-      // If the message can already delivered, no need to continue
-      if (canDeliver(fromHost, rcv.seq)) {
+      bebDeliver(rcv, relayHost);
 #if DEBUG_MODE > 0
-        ttyLog("[L] Skipping deliverable message: " + rcv.uniqAckID());
-#endif
-        continue;
-      }
-
-      bebDeliver(rcv, relayHost, fromHost);
-#if DEBUG_MODE > 0
-      ttyLog("[L] Received msg from " + std::to_string(fromHost->id) +
-             ", relayed by: " + std::to_string(relayHost->id) +
+      ttyLog("[L] Received msg from " + std::to_string(relayHost->id) +
              ", content: " + buffer);
 #endif
     }
@@ -69,15 +59,14 @@ void Node::bebSender() {
 #endif
     Message *current = pending.pop();
     if (!current) {
-      // #if DEBUG_MODE > 0
+#if DEBUG_MODE > 0
       ttyLog("[S] Sending queue empty...");
-      // #endif
+#endif
       continue;
     }
-    auto fromHost = Parser::findHostByID(current->fromID, hosts);
 
     // Check the destination did not ack this message already (if not a bebAck)
-    std::string mID = current->uniqAckID();
+    std::string mID = current->uniqAckID;
     if (!current->isBebAck && current->destHost->hasBebAcked(mID)) {
 #if DEBUG_MODE > 0
       ttyLog("[S] Deleting acked message: " + mID);
@@ -98,7 +87,7 @@ void Node::bebSender() {
       continue;
     } else {
 #if DEBUG_MODE > 0
-      ttyLog("[S] Sent: " + std::string(buffer));
+      ttyLog("[S] Sent: {" + std::string(buffer)+"}");
 #endif
     }
     if (current->isBebAck) {
@@ -106,7 +95,7 @@ void Node::bebSender() {
       delete current;
     } else {
 #if DEBUG_MODE > 0
-      ttyLog("[S] Repushing message in line: " + std::to_string(current->seq));
+      ttyLog("[S] Repushing message in line: " + current->uniqAckID);
 #endif
       pending.push_back(current);
     }
@@ -116,60 +105,30 @@ void Node::bebSender() {
 #endif
 }
 
-void Node::bebDeliver(Message &m, Parser::Host *relayH, Parser::Host *fromH) {
-  // add fromHost to acknowledgers for message m (id:seq)
-  fromH->addAcknowledger(m.seq, relayH->id);
-#if DEBUG_MODE > 1
-  ttyLog("[L] bebDelivered message " + std::to_string(m.seq) + " from: " +
-         std::to_string(fromH->id) + " through: " + std::to_string(relayH->id));
+void Node::bebDeliver(Message &m, Parser::Host *fromH) {
+#if DEBUG_MODE > 0
+  ttyLog("[L] bebDelivered message " + m.uniqAckID + " from: " +
+         std::to_string(fromH->id));
 #endif
 
-  // if (relay, m) are not in forwarded, add and forward
-  if (fromH->addForwarded(m.seq)) {
-#if DEBUG_MODE > 0
-    ttyLog("[L] forwarded message: " + m.uniqAckID());
-#endif
-    bebBroadcast(m.msg, m.seq, m.fromID);
-  } else {
-#if DEBUG_MODE > 0
-    ttyLog("[L] Already forwarded message: " + m.uniqAckID());
-#endif
-  }
+  // TODO
 }
 
-void Node::unsafe_bebBroadcast(std::string m, size_t seq, size_t fromID) {
+void Node::unsafe_bebBroadcast(LAMessage m, std::string uniqAckID) {
   for (auto &host : hosts) {
-    Message *current = new Message(host, m, fromID, false, seq);
+    Message *current = new Message(host, m, uniqAckID, false);
+#if DEBUG_MODE > 2
+  ttyLog("[M] bebBroadcasting message {" + current->to_string()+"}");
+#endif
     pending.unsafe_push_back(current); // no multithreading
   }
 }
-void Node::bebBroadcast(std::string m, size_t seq, size_t fromID) {
+void Node::bebBroadcast(LAMessage m, std::string uniqAckID) {
   pending.mut.lock();
-  unsafe_bebBroadcast(m, seq, fromID);
+  unsafe_bebBroadcast(m, uniqAckID);
   pending.mut.unlock();
 }
 
-bool Node::canDeliver(Parser::Host *host, size_t seq) {
-  return host->sizeAcknowledgers(seq) > hosts.size() / 2;
-}
-
-void Node::tryDeliver() {
-  // Check for deliverable messages
-  for (auto &d_host : hosts) {
-    size_t seq = 1;
-    while (canDeliver(d_host, seq)) {
-      logFile << "d " << d_host->id << " " << seq << std::endl;
-#if DEBUG_MODE > 0
-      ttyLog("[L] Delivered message " + std::to_string(seq) +
-             " from: " + std::to_string(d_host->id));
-#endif
-      seq++;
-    }
-#if DEBUG_MODE > 0
-    for (size_t i = 1; i <= 1000; i++) {
-      std::cout << i << ", nb of forwarders: " << d_host->sizeAcknowledgers(i)
-                << std::endl;
-    }
-#endif
-  }
+void Node::logDecision(){
+  return;
 }

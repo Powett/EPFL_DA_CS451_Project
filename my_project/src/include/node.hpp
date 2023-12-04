@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lattice.hpp"
 #include "messaging.hpp"
 #include "parser.hpp"
 
@@ -17,10 +18,13 @@ public:
   void bebListener();
   void bebSender();
 
-  void bebDeliver(Message &, Parser::Host *, Parser::Host *);
-  void bebBroadcast(std::string, size_t, size_t);
-  void unsafe_bebBroadcast(std::string, size_t, size_t);
+  void bebDeliver(Message &, Parser::Host *);
+  void bebBroadcast(LAMessage, std::string);
+  void unsafe_bebBroadcast(LAMessage, std::string);
 
-  bool canDeliver(Parser::Host *, size_t);
-  void tryDeliver();
+  void laAck(size_t prop_number, size_t round_number);
+  void laNack(size_t prop_number, LAValue val, size_t round_number);
+  void laPropose(size_t prop_number, LAValue val, size_t round_number);
+
+  void logDecision();
 };

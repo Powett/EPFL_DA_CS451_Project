@@ -53,7 +53,7 @@ ssize_t UDPSocket::unicast(const Parser::Host *host, const char *buffer,
 
 #if DEBUG_MODE > 0
   ttyLog("Sending (full) message to " + host->fullAddressReadable() +
-         ", msg: " + buffer);
+         ", msg: {" + buffer+"}");
 #endif
   sockaddr_in add;
   add.sin_family = AF_INET;
@@ -81,9 +81,6 @@ ssize_t UDPSocket::recv(sockaddr_in &from, char *buffer, ssize_t len,
   return ret;
 }
 
-std::string Message::uniqAckID() {
-  return std::to_string(fromID) + ":" + std::to_string(seq);
-}
 
 void ttyLog(std::string message) {
 #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
@@ -94,49 +91,30 @@ void ttyLog(std::string message) {
 #endif
 }
 
-// Format: $Ack:$Nseq:$IDfrom:$MSG
+// Format: $bebAck:$UniqID:$LAMSG
 // return total size
 ssize_t Message::marshal(char *buffer) {
-  std::string payload;
-  payload += (isBebAck ? "a" : "b");
-  payload += ":";
-  payload += std::to_string(seq);
-  payload += ":";
-  payload += std::to_string(fromID);
-  payload += ":";
-  payload += msg;
+  std::string payload=this->to_string();
   ssize_t n = payload.length();
   strncpy(buffer, payload.c_str(), n + 1);
   buffer[n + 1] = '\0';
-#if DEBUG_MODE > 1
-  std::cout << "Marshalled msg: " << buffer << " size " << (n + 1) << std::endl;
+#if DEBUG_MODE > 2
+  std::cout << "Marshalled msg: {" << buffer << "}, size " << (n + 1) << std::endl;
 #endif
   return n;
 }
 
-// Format: $A:$N:$MSG
-Message unmarshal(char *buffer) {
-  std::string payload = std::string(buffer);
-  bool ack = payload[0] == 'a';
-  payload = payload.substr(2);
-  auto separator = payload.find(":");
-  if (separator == std::string::npos) {
-    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
-    return Message();
-  }
-  size_t seq = std::stoul(payload.substr(0, separator));
-  payload = payload.substr(separator + 1);
-  separator = payload.find(":");
-  if (separator == std::string::npos) {
-    std::cerr << "Error unmarshalling raw message: " << payload << std::endl;
-    return Message();
-  }
-  size_t fromID = std::stoul(payload.substr(0, separator));
-  std::string msg = payload.substr(separator + 1);
-#if DEBUG_MODE > 1
-  std::cout << "Unmarshalled msg: " << buffer << "-> {Msg:\"" << msg
-            << "\", type:" << (ack ? "a" : "b") << ", seq:" << seq
-            << ", fromID: " << fromID << "}" << std::endl;
-#endif
-  return Message(nullptr, msg, fromID, ack, seq);
+std::string Message::to_string() const{
+  std::string payload;
+  payload += (isBebAck ? "a" : "b");
+  payload += BEBSEPARATOR;
+  payload += uniqAckID;
+  payload += BEBSEPARATOR;
+  payload += laMsg.to_string();
+  payload += BEBSEPARATOR;
+  return payload;
+}
+
+std::ostream &operator<<(std::ostream &out, Message const&m){
+  return out << m.to_string();
 }

@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "defines.hpp"
+#include "lattice.hpp"
 #include "messaging.hpp"
 #include "node.hpp"
 #include "parser.hpp"
@@ -41,7 +42,7 @@ static void stop(int) {
   }
 
   // log messages
-  node->tryDeliver();
+  node->logDecision();
 
   // clean hosts
   for (auto &host : node->hosts) {
@@ -89,14 +90,18 @@ int main(int argc, char **argv) {
 #endif
 
   // Parse config file
-  Parser::FIFOBroadcastConfig fb_vals = {0};
-  fb_vals = parser.fifoBroadcastValues();
+  Parser::LAConfig const &la_vals = parser.laConfigValues();
+
 #if DEBUG_MODE > 1
 
-  cout << "FIFO Broadcast config:" << endl;
+  cout << "LA config:" << endl;
   cout << "==========================\n";
-  cout << fb_vals.nb_messages << " messages to be sent " << endl;
-
+  cout << "p vs ds: " << la_vals.p << " " << la_vals.vs << " " << la_vals.ds
+       << endl;
+  cout << "Proposed values:" << endl;
+  for (auto const &v : la_vals.proposed_values) {
+    cout << "[" << lavals_to_string(v) << "]" << endl;
+  }
   cout << endl;
 #endif
 
@@ -155,21 +160,17 @@ int main(int argc, char **argv) {
   //   cout << "Message list:\n" << node->pending << endl;
   // #endif
 
-  // Log all broadcast attempts (for outputs uniformity)
-  for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    node->logFile << "b " << i << std::endl;
-    node->self_host->addAcknowledger(i, node->id);
-  }
   // Start listener(s)
-
   listenerThread = thread(&Node::bebListener, node);
 
   // Start sender(s)
-
   senderThread = thread(&Node::bebSender, node);
 
-  for (int i = 1; i <= fb_vals.nb_messages; i++) {
-    node->bebBroadcast("", i, node->id);
+  for (size_t i(0); i < la_vals.p; i++) {
+    // propose new value
+    std::string uniqID = std::to_string(node->id) + "/" + std::to_string(i+1);
+    node->bebBroadcast(LAMessage(PROPOSE, 0, i+1, la_vals.proposed_values[i]),
+                       uniqID);
     usleep(WAIT_US);
   }
 

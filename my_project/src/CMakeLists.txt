@@ -2,7 +2,7 @@
 # You can, however, change the list of files that comprise this variable.
 
 include_directories(include)
-set(SOURCES main.cpp messaging.cpp pendinglist.cpp node.cpp)
+set(SOURCES main.cpp messaging.cpp pendinglist.cpp node.cpp lattice.cpp)
 
 # DO NOT EDIT THE FOLLOWING LINES
 find_package(Threads)
