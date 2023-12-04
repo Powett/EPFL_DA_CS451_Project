@@ -34,6 +34,5 @@ std::string LAMessage::to_string() const{
   payload += std::to_string(round_number);
   payload += LASEPARATOR;
   payload += lavals_to_string(v);
-  payload += LASEPARATOR;
   return payload;
 }

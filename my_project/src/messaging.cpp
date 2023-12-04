@@ -111,7 +111,6 @@ std::string Message::to_string() const{
   payload += uniqAckID;
   payload += BEBSEPARATOR;
   payload += laMsg.to_string();
-  payload += BEBSEPARATOR;
   return payload;
 }
 

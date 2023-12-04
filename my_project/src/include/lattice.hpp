@@ -20,7 +20,6 @@ public:
       : type(t), proposal_number(prop_n), round_number(round_n), v(v) {}
   // $LAMSG: $type|proposal|round|LAValue
   LAMessage(std::string const &s) {
-    std::cout << "[L] Unmarshalling LAMessage: " << s << std::endl;
     std::string payload = s;
     // Get type
     size_t sep_i = payload.find(LASEPARATOR);

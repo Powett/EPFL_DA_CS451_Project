@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
     std::string uniqID = std::to_string(node->id) + "/" + std::to_string(i+1);
     node->bebBroadcast(LAMessage(PROPOSE, 0, i+1, la_vals.proposed_values[i]),
                        uniqID);
-    usleep(WAIT_US);
+    // usleep(WAIT_US);
   }
 
 #if DEBUG_MODE > 0

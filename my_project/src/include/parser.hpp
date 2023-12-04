@@ -33,7 +33,7 @@ public:
   struct Host {
     Host() {}
     Host(size_t id, std::string &ip_or_hostname, unsigned short port)
-        : id{id}, port{htons(port)}, bebAcked(), bebAckedMut() {
+        : id{id}, port{htons(port)}, bebAcked(), bebAckedMut(), seen() {
 
       if (isValidIpAddress(ip_or_hostname.c_str())) {
         ip = inet_addr(ip_or_hostname.c_str());
@@ -63,6 +63,14 @@ public:
     std::unordered_set<std::string> bebAcked;
     // and its mutex
     std::mutex bebAckedMut;
+
+    // all messages delivered from this host
+    std::unordered_set<std::string> seen;
+
+    bool addSeen(std::string aID){
+      auto v=seen.insert(aID);
+      return v.second;
+    }
 
     void addBebAcked(std::string mID) {
       bebAckedMut.lock();
@@ -122,12 +130,6 @@ public:
 
       throw std::runtime_error("No host resolves to IPv4");
     }
-  };
-
-  struct FIFOBroadcastConfig {
-    int nb_messages;
-    FIFOBroadcastConfig() = default;
-    FIFOBroadcastConfig(int nb_messages) : nb_messages(nb_messages){};
   };
 
   struct LAConfig {
@@ -268,7 +270,6 @@ public:
     for(size_t i(0);i<values.p;i++) {
       std::string line;
       std::getline(configFile, line);
-      std::cout << "Got line: " << line << std::endl;
       values.proposed_values.push_back(lavals_from_string(line));
     }
     return values;

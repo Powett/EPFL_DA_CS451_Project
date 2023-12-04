@@ -33,9 +33,12 @@ void Node::bebListener() {
       relayHost->addBebAcked(rcv.uniqAckID);
     } else {
       // Send an ack to the relay
-      Message *ack = new Message(relayHost, rcv.laMsg,  rcv.uniqAckID, true);
+      Message *ack = new Message(relayHost, rcv.laMsg, rcv.uniqAckID, true);
       pending.push(ack);
-      bebDeliver(rcv, relayHost);
+      if (relayHost->addSeen(rcv.uniqAckID)) {
+        // deliver if not delivered yet
+        bebDeliver(rcv, relayHost);
+      }
 #if DEBUG_MODE > 0
       ttyLog("[L] Received msg from " + std::to_string(relayHost->id) +
              ", content: " + buffer);
@@ -87,7 +90,7 @@ void Node::bebSender() {
       continue;
     } else {
 #if DEBUG_MODE > 0
-      ttyLog("[S] Sent: {" + std::string(buffer)+"}");
+      ttyLog("[S] Sent: {" + std::string(buffer) + "}");
 #endif
     }
     if (current->isBebAck) {
@@ -106,9 +109,9 @@ void Node::bebSender() {
 }
 
 void Node::bebDeliver(Message &m, Parser::Host *fromH) {
-#if DEBUG_MODE > 0
-  ttyLog("[L] bebDelivered message " + m.uniqAckID + " from: " +
-         std::to_string(fromH->id));
+#if DEBUG_MODE >= 0
+  ttyLog("[L] bebDelivered message " + m.uniqAckID +
+         " from: " + std::to_string(fromH->id));
 #endif
 
   // TODO
@@ -118,7 +121,7 @@ void Node::unsafe_bebBroadcast(LAMessage m, std::string uniqAckID) {
   for (auto &host : hosts) {
     Message *current = new Message(host, m, uniqAckID, false);
 #if DEBUG_MODE > 2
-  ttyLog("[M] bebBroadcasting message {" + current->to_string()+"}");
+    ttyLog("[M] bebBroadcasting message {" + current->to_string() + "}");
 #endif
     pending.unsafe_push_back(current); // no multithreading
   }
@@ -129,6 +132,4 @@ void Node::bebBroadcast(LAMessage m, std::string uniqAckID) {
   pending.mut.unlock();
 }
 
-void Node::logDecision(){
-  return;
-}
+void Node::logDecision() { return; }
